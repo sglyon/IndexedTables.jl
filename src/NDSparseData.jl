@@ -1,8 +1,11 @@
-using Base.Test
+module NDSparseData
+
 import Base:
     show, summary, eltype, length, sortperm, issorted, permute!, sort!,
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
-    linearindexing, ==, broadcast, empty!, copy, similar, sum
+    linearindexing, ==, broadcast, empty!, copy, similar, sum, merge
+
+export NDSparse, Indexes, WithDefault, flush!, merge, intersect
 
 include("utils.jl")
 
@@ -49,15 +52,6 @@ function permute!(c::Indexes, p::AbstractVector)
     return c
 end
 sort!(c::Indexes) = permute!(c, sortperm(c))
-
-let a = Indexes([1,2,1],["foo","bar","baz"]),
-    b = Indexes([2,1,1],["bar","baz","foo"]),
-    c = Indexes([1,1,2],["foo","baz","bar"])
-    @test a != b
-    @test a != c
-    @test b != c
-    @test sort!(a) == sort!(b) == sort!(c)
-end
 
 immutable NDSparse{T, D<:Tuple, C<:Tuple, V<:AbstractVector}
     indexes::Indexes{D,C}
@@ -327,14 +321,6 @@ function union{D}(I::Indexes{D}, J::Indexes{D})
     return K
 end
 
-let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
-    d = Indexes([1,1,2,2,2], [1,3,1,4,5]),
-    e = Indexes([1,1,1], sort([rand(),0.5,rand()])),
-    f = Indexes([1,1,1], sort([rand(),0.5,rand()]))
-    @test union(c,d) == Indexes([1,1,1,1,2,2,2,2],[1,2,3,4,1,3,4,5])
-    @test length(union(e,f).columns[1]) == 5
-end
-
 function intersect{D}(I::Indexes{D}, J::Indexes{D})
     lI, lJ = length(I), length(J)
     guess = min(lI, lJ)
@@ -356,14 +342,6 @@ function intersect{D}(I::Indexes{D}, J::Indexes{D})
     return K
 end
 
-let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
-    d = Indexes([1,1,2,2,2], [1,3,1,4,5]),
-    e = Indexes([1,1,1], sort([rand(),0.5,rand()])),
-    f = Indexes([1,1,1], sort([rand(),0.5,rand()]))
-    @test intersect(c,d) == Indexes([1,2],[1,5])
-    @test length(intersect(e,f).columns[1]) == 1
-end
-
 # assign y into x out-of-place
 merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D}) = (flush!(x);flush!(y); _merge(x, y))
 # merge without flush!
@@ -372,7 +350,7 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
     n = length(K)
     lx, ly = length(x.indexes), length(y.indexes)
     dflt = x.default
-    data = Vector{typeof(dflt)}(n)
+    data = similar(x.data, n)
     i = j = 1
     for k = 1:n
         r = K[k]
@@ -550,9 +528,4 @@ end
 
 sum(x::NDSparse) = sum(x.data)
 
-srand(123)
-A = NDSparse(rand(1:3,10), rand('A':'F',10), map(UInt8,rand(1:3,10)), collect(1:10), randn(10))
-B = NDSparse(map(UInt8,rand(1:3,10)), rand('A':'F',10), rand(1:3,10), randn(10))
-C = NDSparse(map(UInt8,rand(1:3,10)), rand(1:3,10), rand(1:3,10), randn(10))
-
-nothing # silent loading
+end # module
