@@ -30,7 +30,7 @@ copy(c::Indexes) = Indexes(map(copy, c.columns)...)
 
 row(c::Indexes, i) = Base.ith_all(i, c.columns)
 getindex(c::Indexes, i) = row(c, i)
-rowless(c::Indexes, i, j) = isless(row(c,i), row(c,j))
+rowless(c::Indexes, i, j) = isless_tup(row(c,i), row(c,j))
 
 function ==(x::Indexes, y::Indexes)
     ndims(x) == ndims(y) || return false
