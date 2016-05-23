@@ -200,6 +200,9 @@ pushrow!(I::Indexes, r) = _pushrow!(I.columns[1], r[1], tail(I.columns), tail(r)
 _pushrow!(c1, r1, cr, rr) = (push!(c1, r1); _pushrow!(cr[1], rr[1], tail(cr), tail(rr)))
 _pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
 
+# sizehint, making sure to return first argument
+_sizehint!(a, n) = (sizehint!(a, n); a)
+
 function _getindex(t::NDSparse, idxs)
     if length(idxs) != length(t.indexes.columns)
         error("wrong number of indexes")
@@ -207,9 +210,9 @@ function _getindex(t::NDSparse, idxs)
     I = t.indexes
     lI = length(I)
     guess = min(idxlen(t,idxs), lI)
-    K = Indexes(map(c->sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
+    K = Indexes(map(c->_sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
     td = t.data
-    data = sizehint!(similar(t.data,0),guess)
+    data = _sizehint!(similar(t.data,0),guess)
     for i in range_estimate(I.columns[1], idxs[1])
         ri = I[i]
         if row_in(ri, idxs)
@@ -291,7 +294,7 @@ end
 function union{D}(I::Indexes{D}, J::Indexes{D})
     lI, lJ = length(I), length(J)
     guess = max(lI, lJ)
-    K = Indexes(map(c->sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
+    K = Indexes(map(c->_sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
     i = j = 1
     while true
         if i <= lI && j <= lJ
@@ -324,7 +327,7 @@ end
 function intersect{D}(I::Indexes{D}, J::Indexes{D})
     lI, lJ = length(I), length(J)
     guess = min(lI, lJ)
-    K = Indexes(map(c->sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
+    K = Indexes(map(c->_sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
     i = j = 1
     while i <= lI && j <= lJ
         ri, rj = I[i], J[j]
