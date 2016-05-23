@@ -531,4 +531,6 @@ end
 
 sum(x::NDSparse) = sum(x.data)
 
+include("query.jl")
+
 end # module
