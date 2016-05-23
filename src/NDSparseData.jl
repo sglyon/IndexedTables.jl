@@ -11,10 +11,9 @@ include("utils.jl")
 
 immutable Indexes{D<:Tuple, C<:Tuple} <: AbstractVector{D}
     columns::C
-
-    call(::Type{Indexes}, columns::AbstractVector...) =
-        new{eltypes(typeof(columns)),typeof(columns)}(columns)
 end
+Indexes(columns::AbstractVector...) =
+    Indexes{eltypes(typeof(columns)),typeof(columns)}(columns)
 
 eltype{D,C}(::Type{Indexes{D,C}}) = D
 dimensions{D,C}(::Type{Indexes{D,C}}) = D
