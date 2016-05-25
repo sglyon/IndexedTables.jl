@@ -3,7 +3,7 @@ module NDSparseData
 import Base:
     show, summary, eltype, length, sortperm, issorted, permute!, sort!,
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
-    linearindexing, ==, broadcast, empty!, copy, similar, sum, merge
+    linearindexing, ==, broadcast, empty!, copy, similar, sum, merge, permutedims
 
 export NDSparse, Indexes, WithDefault, flush!, merge, intersect
 
@@ -88,6 +88,11 @@ function copy(t::NDSparse)
     NDSparse(copy(t.indexes), copy(t.data), copy(t.default))
 end
 
+function (==)(a::NDSparse, b::NDSparse)
+    flush!(a); flush!(b)
+    return a.indexes == b.indexes && a.data == b.data
+end
+
 function empty!(t::NDSparse)
     empty!(t.indexes)
     empty!(t.data)
@@ -154,6 +159,14 @@ function sort!(t::NDSparse)
     permute!(t.indexes, p)
     permute!(t.data, p)
     return t
+end
+
+function permutedims(t::NDSparse, p::AbstractVector)
+    flush!(t)
+    cols = t.indexes.columns[p]
+    inew = Indexes(cols...)
+    ip = sortperm(inew)
+    NDSparse(Indexes(map(c->c[ip], cols)...), t.data[ip], t.default)
 end
 
 getindex(t::NDSparse, idxs...) = (flush!(t); _getindex(t, idxs))

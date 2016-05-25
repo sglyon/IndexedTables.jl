@@ -65,3 +65,17 @@ let S = spdiagm(1:5)
     nd[1:5,1:5] = 2
     @test sum(nd[1:5, 1:5]) == 50
 end
+
+let a = rand(10), b = rand(10), c = rand(10)
+    @test NDSparse(a, b, c) == NDSparse(a, b, c)
+    c2 = copy(c)
+    c2[1] += 1
+    @test NDSparse(a, b, c) != NDSparse(a, b, c2)
+    b2 = copy(b)
+    b2[1] += 1
+    @test NDSparse(a, b, c) != NDSparse(a, b2, c)
+end
+
+let a = rand(10), b = rand(10), c = rand(10), d = rand(10)
+    @test permutedims(NDSparse(a,b,c,d),[3,1,2]) == NDSparse(c,a,b,d)
+end
