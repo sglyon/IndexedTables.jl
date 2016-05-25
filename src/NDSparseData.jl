@@ -130,6 +130,10 @@ dimensions(t::NDSparse) = dimensions(t.indexes)
 length(t::NDSparse) = (flush!(t);length(t.indexes))
 eltype{T,D,C}(::Type{NDSparse{T,D,C}}) = T
 
+start(a::NDSparse) = start(a.data)
+next(a::NDSparse, st) = next(a.data, st)
+done(a::NDSparse, st) = done(a.data, st)
+
 function sort!(t::NDSparse)
     p = sortperm(t.indexes)
     permute!(t.indexes, p)
