@@ -30,7 +30,22 @@ copy(c::Indexes) = Indexes(map(copy, c.columns)...)
 
 row(c::Indexes, i) = Base.ith_all(i, c.columns)
 getindex(c::Indexes, i) = row(c, i)
-rowless(c::Indexes, i, j) = isless_tup(row(c,i), row(c,j))
+@generated function rowless{D,C}(c::Indexes{D,C}, i, j)
+    N = length(C.parameters)
+    ex = :()
+    for n in N:-1:1
+        if n == N
+            ex = :(c.columns[$n][i] < c.columns[$n][j])
+        else
+            ex = quote
+                let ei = c.columns[$n][i], ej = c.columns[$n][j]
+                    (ei == ej) ? ($ex) : (ei < ej)
+                end
+            end
+        end
+    end
+    ex
+end
 
 function ==(x::Indexes, y::Indexes)
     ndims(x) == ndims(y) || return false
@@ -201,8 +216,8 @@ range_estimate(col, idx) = 1:length(col)
 range_estimate(col, idx::AbstractArray) = searchsortedfirst(col,first(idx)):searchsortedlast(col,last(idx))
 
 pushrow!(I::Indexes, r) = _pushrow!(I.columns[1], r[1], tail(I.columns), tail(r))
-_pushrow!(c1, r1, cr, rr) = (push!(c1, r1); _pushrow!(cr[1], rr[1], tail(cr), tail(rr)))
-_pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
+@inline _pushrow!(c1, r1, cr, rr) = (push!(c1, r1); _pushrow!(cr[1], rr[1], tail(cr), tail(rr)))
+@inline _pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
 
 # sizehint, making sure to return first argument
 _sizehint!(a, n) = (sizehint!(a, n); a)
