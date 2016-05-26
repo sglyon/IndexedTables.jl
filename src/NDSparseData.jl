@@ -28,7 +28,10 @@ empty!(c::Indexes) = (map(empty!, c.columns); c)
 similar(c::Indexes) = empty!(Indexes(map(similar, c.columns)...))
 copy(c::Indexes) = Indexes(map(copy, c.columns)...)
 
-row(c::Indexes, i) = Base.ith_all(i, c.columns)
+@inline ith_all(i, ::Tuple{}) = ()
+@inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+
+row(c::Indexes, i) = ith_all(i, c.columns)
 getindex(c::Indexes, i) = row(c, i)
 @generated function rowless{D,C}(c::Indexes{D,C}, i, j)
     N = length(C.parameters)
@@ -190,8 +193,8 @@ import Base: tail
 # test whether row r is within product(idxs...)
 #row_in(r::Tuple{}, idxs) = true
 row_in(r, idxs) = row_in(r[1], idxs[1], tail(r), tail(idxs))
-row_in(r1, i1, rr, ri) = _in(r1,i1) & row_in(rr[1], ri[1], tail(rr), tail(ri))
-row_in(r1, i1, rr::Tuple{}, ri) = _in(r1,i1)
+@inline row_in(r1, i1, rr, ri) = _in(r1,i1) & row_in(rr[1], ri[1], tail(rr), tail(ri))
+@inline row_in(r1, i1, rr::Tuple{}, ri) = _in(r1,i1)
 
 function countunique(C)
     seen = Set{eltype(C)}()
