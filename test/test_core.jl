@@ -79,3 +79,8 @@ end
 let a = rand(10), b = rand(10), c = rand(10), d = rand(10)
     @test permutedims(NDSparse(a,b,c,d),[3,1,2]) == NDSparse(c,a,b,d)
 end
+
+let r=1:5, s=1:2:5
+    A = NDSparse([r;], [r;], [r;])
+    @test A[s, :] == NDSparse([s;], [s;], [s;])
+end
