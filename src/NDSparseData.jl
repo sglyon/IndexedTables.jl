@@ -185,7 +185,7 @@ end
 
 _in(x, y) = in(x, y)
 _in(x, ::Colon) = true
-_in(x, v::AbstractVector) = searchsortedfirst(v, x)<=length(v)
+_in(x, v::AbstractVector) = (idx=searchsortedfirst(v, x); idx<=length(v) && v[idx]==x)
 _in(x, v::AbstractString) = x == v
 _in(x, v::Dimension) = x == v
 
