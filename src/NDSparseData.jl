@@ -1,7 +1,7 @@
 module NDSparseData
 
 import Base:
-    show, summary, eltype, length, sortperm, issorted, permute!, sort!,
+    show, showarray, writemime, summary, eltype, length, nnz, sortperm, issorted, permute!, sort!,
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
     linearindexing, ==, broadcast, empty!, copy, similar, sum, merge, permutedims
 
@@ -11,12 +11,12 @@ include("utils.jl")
 
 immutable Indexes{D<:Tuple, C<:Tuple} <: AbstractVector{D}
     columns::C
-
-    call(::Type{Indexes}, columns::AbstractVector...) =
-        new{eltypes(typeof(columns)),typeof(columns)}(columns)
 end
+Indexes(columns::AbstractVector...) =
+    Indexes{eltypes(typeof(columns)),typeof(columns)}(columns)
 
 eltype{D,C}(::Type{Indexes{D,C}}) = D
+dimensions{T<:Indexes}(I::T) = dimensions(T)
 dimensions{D,C}(::Type{Indexes{D,C}}) = D
 length(c::Indexes) = length(c.columns[1])
 ndims(c::Indexes) = length(c.columns)
@@ -71,24 +71,33 @@ function permute!(c::Indexes, p::AbstractVector)
 end
 sort!(c::Indexes) = permute!(c, sortperm(c))
 
-immutable NDSparse{T, D<:Tuple, C<:Tuple, V<:AbstractVector}
+# T: eltype of data
+# N: number of dimensions
+# D: eltype of index
+# C: type of the index store
+# V: Vector{T}, type of the data vector
+immutable NDSparse{T, N, D<:Tuple, C<:Tuple, V<:AbstractVector} <: AbstractArray{T,N}
     indexes::Indexes{D,C}
     data::V
     default::T
+    sz::NTuple{N,Int}
 
     index_buffer::Indexes{D,C}
     data_buffer::V
 end
 
-NDSparse(i::Indexes, d::AbstractVector, dflt) =
-    NDSparse(i, d, dflt, Indexes(map(c->similar(c, 0), i.columns)...), similar(d, 0))
+size{T,N}(t::NDSparse{T,N}) = t.sz
+nnz(t::NDSparse) = (flush!(t); length(t.data))
 
-similar(t::NDSparse) =
-    NDSparse(similar(t.indexes), empty!(similar(t.data)), copy(t.default))
+NDSparse(sz::Tuple, i::Indexes, d::AbstractVector, dflt) =
+    NDSparse(i, d, dflt, sz, Indexes(map(c->similar(c, 0), i.columns)...), similar(d, 0))
+
+similar{T,N}(t::NDSparse{T,N}, ::Type{T}, dims::NTuple{N,Int}) = NDSparse(dims, similar(t.indexes), empty!(similar(t.data)), copy(t.default))
+similar{T,S,N}(t::NDSparse{T,N}, ::Type{S}, dims::NTuple{N,Int}) = NDSparse(dims, similar(t.indexes), Array(S, 0), convert(S, t.default))
 
 function copy(t::NDSparse)
     flush!(t)
-    NDSparse(copy(t.indexes), copy(t.data), copy(t.default))
+    NDSparse(size(t), copy(t.indexes), copy(t.data), copy(t.default))
 end
 
 function (==)(a::NDSparse, b::NDSparse)
@@ -104,9 +113,11 @@ function empty!(t::NDSparse)
     return t
 end
 
-function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
+writemime(io::IO, m::MIME"text/plain", t::NDSparse) = show(io, t)
+showarray(io::IO, t::NDSparse) = show(io, t)
+function show{T,N,D<:Tuple}(io::IO, t::NDSparse{T,N,D})
     flush!(t)
-    print(io, "NDSparse{$T,$D}:")
+    print(io, "NDSparse{$T,$N,$D}:")
     n = length(t.indexes)
     for i in 1:min(n,10)
         println(io)
@@ -126,7 +137,7 @@ immutable WithDefault{T}
     default::T
 end
 
-function NDSparse(columns...)
+function NDSparse(sz::Tuple, columns...)
     keys = columns[1:end-1]
     data = columns[end]
     if isa(data, WithDefault)
@@ -145,13 +156,10 @@ function NDSparse(columns...)
         permute!(indexes, p)
         permute!(data, p)
     end
-    NDSparse(indexes, data, dflt)
+    NDSparse(sz, indexes, data, dflt)
 end
 
-ndims(t::NDSparse) = ndims(t.indexes)
 dimensions(t::NDSparse) = dimensions(t.indexes)
-length(t::NDSparse) = (flush!(t);length(t.indexes))
-eltype{T,D,C}(::Type{NDSparse{T,D,C}}) = T
 
 start(a::NDSparse) = start(a.data)
 next(a::NDSparse, st) = next(a.data, st)
@@ -169,15 +177,19 @@ function permutedims(t::NDSparse, p::AbstractVector)
     cols = t.indexes.columns[p]
     inew = Indexes(cols...)
     ip = sortperm(inew)
-    NDSparse(Indexes(map(c->c[ip], cols)...), t.data[ip], t.default)
+    NDSparse(size(t)[p], Indexes(map(c->c[ip], cols)...), t.data[ip], t.default)
 end
 
 getindex(t::NDSparse, idxs...) = (flush!(t); _getindex(t, idxs))
+getindex{T,N}(t::NDSparse{T,N}, I::CartesianIndex{N}) = (flush!(t); _getindex(t, I.I))
 
-_getindex{T,D<:Tuple}(t::NDSparse{T,D}, idxs::D) = _getindex_scalar(t, idxs)
+_getindex{T,N,D<:Tuple}(t::NDSparse{T,N,D}, idxs::D) = _getindex_scalar(t, idxs)
 _getindex(t::NDSparse, idxs::Tuple{Vararg{Real}}) = _getindex_scalar(t, idxs)
 
 function _getindex_scalar(t, idxs)
+    if length(idxs) != length(t.indexes.columns)
+        error("wrong number of indexes")
+    end
     i = searchsorted(t.indexes, idxs)
     length(i) != 1 && return t.default
     t.data[first(i)]
@@ -196,13 +208,13 @@ row_in(r, idxs) = row_in(r[1], idxs[1], tail(r), tail(idxs))
 @inline row_in(r1, i1, rr, ri) = _in(r1,i1) & row_in(rr[1], ri[1], tail(rr), tail(ri))
 @inline row_in(r1, i1, rr::Tuple{}, ri) = _in(r1,i1)
 
-function countunique(C)
-    seen = Set{eltype(C)}()
-    for x in C
-        push!(seen, x)
-    end
-    length(seen)
-end
+#function countunique(C)
+#    seen = Set{eltype(C)}()
+#    for x in C
+#        push!(seen, x)
+#    end
+#    length(seen)
+#end
 
 length_estimate(col, idx::AbstractArray) = length(idx)
 length_estimate(col, idx) = 1
@@ -255,14 +267,14 @@ function _getindex(t::NDSparse, idxs)
             push!(data, td[i])
         end
     end
-    NDSparse(K, data, t.default)
+    NDSparse(size(t), K, data, t.default)
 end
 
 setindex!(t::NDSparse, rhs, idxs...) = _setindex!(t, rhs, idxs)
 
-_setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs::D) = _setindex_scalar!(t, rhs, idxs)
+_setindex!{T,N,D}(t::NDSparse{T,N,D}, rhs::AbstractArray, idxs::D) = _setindex_scalar!(t, rhs, idxs)
 _setindex!(t::NDSparse, rhs::AbstractArray, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
-_setindex!{T,D}(t::NDSparse{T,D}, rhs, idxs::D) = _setindex_scalar!(t, rhs, idxs)
+_setindex!{T,N,D}(t::NDSparse{T,N,D}, rhs, idxs::D) = _setindex_scalar!(t, rhs, idxs)
 #_setindex!(t::NDSparse, rhs, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
 
 function _setindex_scalar!(t, rhs, idxs)
@@ -283,17 +295,17 @@ fixi(t::NDSparse, n::Int, i1, irest...) = (i1, fixi(t, n+1, irest...)...)
 fixi(t::NDSparse, n::Int) = ()
 fixi(t::NDSparse, idxs) = fixi(t, 1, idxs...)
 
-_setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs) =
+_setindex!{T,N,D}(t::NDSparse{T,N,D}, rhs::AbstractArray, idxs) =
     _setindex_array_range!(t, rhs, fixi(t, idxs))
 
-function _setindex_array_range!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs)
+function _setindex_array_range!{T,N,D}(t::NDSparse{T,N,D}, rhs::AbstractArray, idxs)
     # TODO performance
     for (x,I) in zip(rhs,product(idxs...))
         _setindex!(t, x, convert(D, I))
     end
 end
 
-function _setindex!{T,D}(t::NDSparse{T,D}, rhs, idxs)
+function _setindex!{T,N,D}(t::NDSparse{T,N,D}, rhs, idxs)
     # TODO performance
     for I in product(idxs...)
         _setindex!(t, rhs, convert(D, I))
@@ -309,7 +321,7 @@ function flush!(t::NDSparse)
         permute!(t.data_buffer, p)
 
         # 2. merge to a new copy
-        new = _merge(t, NDSparse(t.index_buffer, t.data_buffer, t.default))
+        new = _merge(t, NDSparse(size(t), t.index_buffer, t.data_buffer, t.default))
 
         # 3. resize and copy data into t
         for i = 1:length(t.indexes.columns)
@@ -381,9 +393,9 @@ function intersect{D}(I::Indexes{D}, J::Indexes{D})
 end
 
 # assign y into x out-of-place
-merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D}) = (flush!(x);flush!(y); _merge(x, y))
+merge{T,N,S,D}(x::NDSparse{T,N,D}, y::NDSparse{S,N,D}) = (flush!(x);flush!(y); _merge(x, y))
 # merge without flush!
-function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
+function _merge{T,N,S,D}(x::NDSparse{T,N,D}, y::NDSparse{S,N,D})
     K = union(x.indexes, y.indexes)
     n = length(K)
     lx, ly = length(x.indexes), length(y.indexes)
@@ -403,10 +415,11 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
             i += 1
         end
     end
-    NDSparse(K, data, dflt)
+    resultsz = tuple([maximum(s) for s in zip(size(x), size(y))]...)
+    NDSparse(resultsz, K, data, dflt)
 end
 
-function map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D})
+function map{T,N,S,D}(f, x::NDSparse{T,N,D}, y::NDSparse{S,N,D})
     flush!(x); flush!(y)
     K = union(x.indexes, y.indexes)
     n = length(K)
@@ -427,16 +440,17 @@ function map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D})
         end
         data[k] = f(xval, yval)
     end
-    NDSparse(K, data, dflt)
+    resultsz = tuple([maximum(s) for s in zip(size(x), size(y))]...)
+    NDSparse(resultsz, K, data, dflt)
 end
 
-map(f, x::NDSparse) = NDSparse(x.indexes, map(f, x.data), f(x.default))
+map(f, x::NDSparse) = NDSparse(size(x), x.indexes, map(f, x.data), f(x.default))
 
 tslice(t::Tuple, I) = ntuple(i->t[I[i]], length(I))
 
 function match_indices(A::NDSparse, B::NDSparse)
-    Ap = typeof(A).parameters[2].parameters
-    Bp = typeof(B).parameters[2].parameters
+    Ap = typeof(A).parameters[3].parameters
+    Bp = typeof(B).parameters[3].parameters
     matches = zeros(Int, length(Ap))
     J = IntSet(1:length(Bp))
     for i = 1:length(Ap)
@@ -503,10 +517,10 @@ end
 
 broadcast(f::Function, A::NDSparse, B::NDSparse) = broadcast!(f, similar(A), A, B)
 
-broadcast(f::Function, x::NDSparse, y) = NDSparse(x.indexes, broadcast(f, x.data, y), f(x.default, y))
-broadcast(f::Function, y, x::NDSparse) = NDSparse(x.indexes, broadcast(f, y, x.data), f(y, x.default))
+broadcast(f::Function, x::NDSparse, y) = NDSparse(size(x), x.indexes, broadcast(f, x.data, y), f(x.default, y))
+broadcast(f::Function, y, x::NDSparse) = NDSparse(size(x), x.indexes, broadcast(f, y, x.data), f(y, x.default))
 
-convert(::Type{NDSparse}, m::SparseMatrixCSC) = NDSparse(findnz(m)[[2,1,3]]...)
+convert(::Type{NDSparse}, m::SparseMatrixCSC) = NDSparse(size(m), findnz(m)[[2,1,3]]...)
 
 function convert{T}(::Type{NDSparse}, a::AbstractArray{T}; default::T = zero(eltype(a)))
     n = 0
@@ -525,7 +539,7 @@ function convert{T}(::Type{NDSparse}, a::AbstractArray{T}; default::T = zero(elt
             i += 1
         end
     end
-    NDSparse(Indexes(reverse(idxs)...), data, default)
+    NDSparse(size(a), Indexes(reverse(idxs)...), data, default)
 end
 
 # combine adjacent rows with equal indexes using the given function
@@ -560,7 +574,7 @@ end
 function convert_dimension(x::NDSparse, d::Int, xlat::Dict, agg=+)
     cols = x.indexes.columns
     d2 = map(x->xlat[x], cols[d])
-    x2 = NDSparse(map(copy,cols[1:d-1])..., d2, map(copy,cols[d+1:end])..., copy(x.data))
+    x2 = NDSparse(size(x), map(copy,cols[1:d-1])..., d2, map(copy,cols[d+1:end])..., copy(x.data))
     aggregate!(agg, x2)
 end
 
