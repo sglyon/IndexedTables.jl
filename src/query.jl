@@ -16,8 +16,8 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
    guess = min(ll, rr)
 
    # Initialize output array components
-   I = Indexes(map(c->sizehint!(similar(c,0) ,guess), lI.columns)...)
-   data = sizehint!(similar(lD, 0), guess)
+   I = Indexes(map(c->_sizehint!(similar(c,0), guess), lI.columns)...)
+   data = _sizehint!(similar(lD, 0), guess)
    default = left.default
 
    # Match and insert rows
