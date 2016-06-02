@@ -113,7 +113,9 @@ function empty!(t::NDSparse)
     return t
 end
 
+if isless(Base.VERSION, v"0.5.0-")
 writemime(io::IO, m::MIME"text/plain", t::NDSparse) = show(io, t)
+end
 showarray(io::IO, t::NDSparse) = show(io, t)
 function show{T,N,D<:Tuple}(io::IO, t::NDSparse{T,N,D})
     flush!(t)
@@ -248,7 +250,8 @@ pushrow!(I::Indexes, r) = _pushrow!(I.columns[1], r[1], tail(I.columns), tail(r)
 @inline _pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
 
 # sizehint, making sure to return first argument
-_sizehint!(a, n) = (sizehint!(a, n); a)
+_sizehint!{T}(a::Array{T,1}, n::Integer) = (sizehint!(a, n); a)
+_sizehint!(a::AbstractArray, sz::Integer) = a
 
 function _getindex(t::NDSparse, idxs)
     if length(idxs) != length(t.indexes.columns)
