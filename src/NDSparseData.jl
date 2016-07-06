@@ -107,7 +107,8 @@ if isless(Base.VERSION, v"0.5.0-")
 writemime(io::IO, m::MIME"text/plain", t::NDSparse) = show(io, t)
 end
 showarray(io::IO, t::NDSparse) = show(io, t)
-function show{T,N,D<:Tuple}(io::IO, t::NDSparse{T,N,D})
+
+function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     flush!(t)
     print(io, "NDSparse{$T,$D}:")
     n = length(t.indexes)
