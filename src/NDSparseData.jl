@@ -5,7 +5,7 @@ import Base:
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
     linearindexing, ==, broadcast, empty!, copy, similar, sum, merge, permutedims
 
-export NDSparse, Indexes, WithDefault, flush!, merge, intersect
+export NDSparse, Indexes, WithDefault, flush!, merge, intersect, aggregate!
 
 include("utils.jl")
 

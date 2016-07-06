@@ -55,6 +55,11 @@ function Base.select(arr::NDSparse, conditions::Pair...)
    NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs], arr.default)
 end
 
+# select a subset of columns
+function Base.select(arr::NDSparse, cols::Int...)
+    NDSparse([copy(arr.indexes.columns[c]) for c in cols]..., copy(arr.data))
+end
+
 # Filter on data field
 function Base.filter(fn::Function, arr::NDSparse)
    cols = arr.indexes.columns
