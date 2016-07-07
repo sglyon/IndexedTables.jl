@@ -7,12 +7,12 @@ suite = BenchmarkGroup()
 # Helpers
 ###
 
-function copy_unflushed(S, cols, data, default)
-   NDSparse(Indexes(map(c->similar(c, 0), cols)...), similar(data, 0), default, (S,S,S), Indexes(deepcopy(cols)...), copy(data))
+function copy_unflushed(cols, data)
+   NDSparse(Indexes(map(c->similar(c, 0), cols)...), similar(data, 0), false, Indexes(deepcopy(cols)...), copy(data))
 end
 
-function copy_flushed(S, cols, data)
-   NDSparse((S,S,S), deepcopy(cols)..., copy(data))
+function copy_flushed(cols, data)
+   NDSparse(deepcopy(cols)..., copy(data))
 end
 
 ###
@@ -27,15 +27,15 @@ srand(seed)
 # Construction
 ###
 
-function construction_suite(N::Int, S::Int, D::Int, cols)
+function construction_suite(N::Int, D::Int, cols)
    numeric_data = rand(Int, N)
    mixed_data = let sz = div(N, 4)
       vcat(rand(Int, sz), rand(sz), map(x->randstring(5), 1 : sz), bitrand(N - 3*sz))::Vector{Any}
    end
 
    suite = BenchmarkGroup(["Construction"])
-   suite["numeric"] = @benchmarkable NDSparse(($S,$S,$S), c..., d) setup=(c = deepcopy($cols); d = copy($numeric_data))
-   suite["mixed"] = @benchmarkable NDSparse(($S,$S,$S), c..., d) setup=(c = deepcopy($cols); d = WithDefault($mixed_data, nothing))
+   suite["numeric"] = @benchmarkable NDSparse(c..., d) setup=(c = deepcopy($cols); d = copy($numeric_data))
+   suite["mixed"] = @benchmarkable NDSparse(Indexes(c...), d, nothing) setup=(c = deepcopy($cols); d = $mixed_data)
    return suite
 end
 
@@ -43,9 +43,9 @@ end
 # Flush
 ###
 
-function flush_suite(S::Int, cols, data, flushed_arr)
+function flush_suite(cols, data, flushed_arr)
    suite = BenchmarkGroup(["Flush"])
-   suite["unflushed"] = @benchmarkable flush!(arr) setup=(arr = copy_unflushed($S, $cols, $data, false))
+   suite["unflushed"] = @benchmarkable flush!(arr) setup=(arr = copy_unflushed($cols, $data))
    suite["flushed"] = @benchmarkable flush!($flushed_arr)
    return suite
 end
@@ -54,16 +54,16 @@ end
 # Indexing
 ###
 
-function indexing_suite(S::Int, N::Int, D::Int, cols, data, vect_size, flushed_arr)
+function indexing_suite(N::Int, D::Int, cols, data, vect_size, flushed_arr)
    unit_get_index = Base.ith_all(rand(1 : N), (cols...))
    range_get_indices = let start = rand(1 : N - vect_size)
       (map(x -> UnitRange(sort!([x[start], x[start + vect_size]])...), cols)...)
    end
    vector_get_indices = let v = rand(1 : N, vect_size)
-      (map(x -> x[v], cols)...)
+      (map(x -> sort(x[v]), cols)...)
    end
    unit_set_index = map(x -> N + 1 + x, unit_get_index)
-   range_set_indices = (map(x -> x : (x + vect_size), rand(1 : (N - vect_size), D))...)
+   range_set_indices = (map(x -> x : (x + vect_size), sort(rand(1 : (N - vect_size), D)))...)
    vector_set_indices = map(x -> x .+ N, vector_get_indices)
 
    unit_val = true
@@ -78,12 +78,12 @@ function indexing_suite(S::Int, N::Int, D::Int, cols, data, vect_size, flushed_a
    suite["getindex"]["vector"] = @benchmarkable getindex($flushed_arr, $vector_get_indices...)
 
    suite["setindex!"] = BenchmarkGroup()
-   suite["setindex!"]["overwrite", "unit"] = @benchmarkable setindex!(arr, $unit_val, $unit_get_index...) setup=(arr=copy_flushed($S, $cols, $data))
-   suite["setindex!"]["overwrite", "range"] = @benchmarkable setindex!(arr, $range_vals, $range_set_indices...) setup=(arr=copy_flushed($S, $cols, $data))
-   suite["setindex!"]["overwrite", "vector"] = @benchmarkable setindex!(arr, $vector_vals, $vector_get_indices...) setup=(arr=copy_flushed($S, $cols, $data))
+   suite["setindex!"]["overwrite", "unit"] = @benchmarkable setindex!(arr, $unit_val, $unit_get_index...) setup=(arr=copy_flushed($cols, $data))
+   suite["setindex!"]["overwrite", "range"] = @benchmarkable setindex!(arr, $range_vals, $range_set_indices...) setup=(arr=copy_flushed($cols, $data))
+   suite["setindex!"]["overwrite", "vector"] = @benchmarkable setindex!(arr, $vector_vals, $vector_get_indices...) setup=(arr=copy_flushed($cols, $data))
 
-   suite["setindex!"]["freshwrite", "unit"] = @benchmarkable setindex!(arr, $unit_val, $unit_set_index...) setup=(arr=copy_flushed($S, $cols, $data))
-   suite["setindex!"]["freshwrite", "vector"] = @benchmarkable setindex!(arr, $vector_vals, $vector_set_indices...) setup=(arr=copy_flushed($S, $cols, $data))
+   suite["setindex!"]["freshwrite", "unit"] = @benchmarkable setindex!(arr, $unit_val, $unit_set_index...) setup=(arr=copy_flushed($cols, $data))
+   suite["setindex!"]["freshwrite", "vector"] = @benchmarkable setindex!(arr, $vector_vals, $vector_set_indices...) setup=(arr=copy_flushed($cols, $data))
 
    return suite
 end
@@ -94,17 +94,17 @@ function operations_suite(S::Int, N::Int, D::Int, cols, data, flushed_arr, filte
 
    suite = BenchmarkGroup(["Operations"])
 
-   suite["merge"] = @benchmarkable merge(target, to_merge) setup=(target = copy_flushed(S, cols, data); to_merge = copy_flushed($S, $cols_, $data))
-   suite["naturaljoin"] = @benchmarkable naturaljoin(left, right, |) setup=(left = copy_flushed(S, cols, data); right = copy_flushed($S, $cols_, $data))
+   suite["merge"] = @benchmarkable merge(target, to_merge) setup=(target = copy_flushed(cols, data); to_merge = copy_flushed($cols_, $data))
+   suite["naturaljoin"] = @benchmarkable naturaljoin(left, right, |) setup=(left = copy_flushed(cols, data); right = copy_flushed($cols_, $data))
    suite["select"] = @benchmarkable select($flushed_arr, map(d -> d => filter_function, 1 : D)...)
    suite["filter"] = @benchmarkable filter($filter_function, $flushed_arr)
 end
 
 function build_suite(S, N, D, vect_size, cols, data, flushed_arr)
    suite = BenchmarkGroup(["ROOT"])
-   suite["Construction"] = construction_suite(N, S, D, cols)
-   suite["Flush"] = flush_suite(S, cols, data, flushed_arr)
-   suite["Indexing"] = indexing_suite(S, N, D, cols, data, vect_size, flushed_arr)
+   suite["Construction"] = construction_suite(N, D, cols)
+   suite["Flush"] = flush_suite(cols, data, flushed_arr)
+   suite["Indexing"] = indexing_suite(N, D, cols, data, vect_size, flushed_arr)
    suite["Operations"] = operations_suite(S, N, D, cols, data, flushed_arr)
 
    return suite
@@ -125,7 +125,7 @@ function main()
 
    cols = [rand(1 : S, N) for _ in 1 : D]                     # Columns for NDSparse object
    data = trues(N)                                            # Data for NDSparse object
-   flushed_arr = copy_flushed(S, cols, data)                  # NDSparse object)
+   flushed_arr = copy_flushed(cols, data)                     # NDSparse object)
 
    suite = build_suite(S, N, D, vect_size, cols, data, flushed_arr)
 
