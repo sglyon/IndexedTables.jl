@@ -52,6 +52,8 @@ end
 
 # lexicographic order product iterator
 
+import Base: length, eltype, start, next, done
+
 abstract AbstractProdIterator
 
 immutable Prod2{I1, I2} <: AbstractProdIterator
@@ -62,8 +64,7 @@ end
 product(a) = a
 product(a, b) = Prod2(a, b)
 eltype{I1,I2}(::Type{Prod2{I1,I2}}) = Tuple{eltype(I1), eltype(I2)}
-length(p::AbstractProdIterator) = nnz(p.a)*nnz(p.b)
-nnz(p::AbstractProdIterator) = length(p)
+length(p::AbstractProdIterator) = length(p.a)*length(p.b)
 
 function start(p::AbstractProdIterator)
     s1, s2 = start(p.a), start(p.b)
