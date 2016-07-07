@@ -39,8 +39,7 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
    end
 
    # Generate final datastructure
-   resultsz = tuple([maximum(s) for s in zip(size(left), size(right))]...)
-   NDSparse(resultsz, I, data, default)
+   NDSparse(I, data, default)
 end
 
 
@@ -48,12 +47,12 @@ end
 # Example: select(arr, 1 => x->x>10, 3 => x->x!=10 ...)
 
 function Base.select(arr::NDSparse, conditions::Pair...)
-   indxs = 1:nnz(arr)
+   indxs = 1:length(arr)
    cols = arr.indexes.columns
    for (c,f) in conditions
       indxs = intersect(indxs, filter(i->f(cols[c][i]), indxs))
    end
-   NDSparse(size(arr), Indexes(map(x->x[indxs], cols)...), arr.data[indxs], arr.default)
+   NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs], arr.default)
 end
 
 # Filter on data field
@@ -61,5 +60,5 @@ function Base.filter(fn::Function, arr::NDSparse)
    cols = arr.indexes.columns
    data = arr.data
    indxs = filter(i->fn(data[i]), eachindex(data))
-   NDSparse(size(arr), Indexes(map(x->x[indxs], cols)...), data[indxs], arr.default)
+   NDSparse(Indexes(map(x->x[indxs], cols)...), data[indxs], arr.default)
 end
