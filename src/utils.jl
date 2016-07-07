@@ -27,8 +27,6 @@ isless(a::Dimension, b::Dimension) = isless(a.value, b.value)
 convert{T<:Real}(::Type{T}, d::Dimension{T}) = d.value
 convert{T<:Dimension}(::Type{T}, x::Real) = T(x)
 
-default{T}(D::Type{Dimension{T}}) = D(default(T))
-
 function show(io::IO, d::Dimension)
     print(io, typeof(d).name, "(")
     show(io, d.value)

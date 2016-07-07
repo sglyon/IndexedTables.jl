@@ -18,7 +18,6 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
    # Initialize output array components
    I = Indexes(map(c->_sizehint!(similar(c,0), guess), lI.columns)...)
    data = _sizehint!(similar(lD, 0), guess)
-   default = left.default
 
    # Match and insert rows
    i = j = 1
@@ -39,7 +38,7 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
    end
 
    # Generate final datastructure
-   NDSparse(I, data, default)
+   NDSparse(I, data)
 end
 
 
@@ -52,7 +51,7 @@ function Base.select(arr::NDSparse, conditions::Pair...)
     for (c,f) in conditions
         filter!(i->f(cols[c][i]), indxs)
     end
-    NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs], arr.default)
+    NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs])
 end
 
 # select a subset of columns
@@ -65,5 +64,5 @@ function Base.filter(fn::Function, arr::NDSparse)
    cols = arr.indexes.columns
    data = arr.data
    indxs = filter(i->fn(data[i]), eachindex(data))
-   NDSparse(Indexes(map(x->x[indxs], cols)...), data[indxs], arr.default)
+   NDSparse(Indexes(map(x->x[indxs], cols)...), data[indxs])
 end
