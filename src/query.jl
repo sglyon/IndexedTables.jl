@@ -47,12 +47,12 @@ end
 # Example: select(arr, 1 => x->x>10, 3 => x->x!=10 ...)
 
 function Base.select(arr::NDSparse, conditions::Pair...)
-   indxs = 1:length(arr)
-   cols = arr.indexes.columns
-   for (c,f) in conditions
-      indxs = filter(i->f(cols[c][i]), indxs)
-   end
-   NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs], arr.default)
+    indxs = [1:length(arr);]
+    cols = arr.indexes.columns
+    for (c,f) in conditions
+        filter!(i->f(cols[c][i]), indxs)
+    end
+    NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs], arr.default)
 end
 
 # select a subset of columns
