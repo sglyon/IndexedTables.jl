@@ -3,9 +3,10 @@ module NDSparseData
 import Base:
     show, summary, eltype, length, sortperm, issorted, permute!, sort!,
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
-    linearindexing, ==, broadcast, empty!, copy, similar, sum, merge, permutedims
+    linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
+    permutedims
 
-export NDSparse, Indexes, WithDefault, flush!, merge, intersect, aggregate!
+export NDSparse, Indexes, WithDefault, flush!, merge, intersect, aggregate!, where, pairs
 
 include("utils.jl")
 
@@ -176,6 +177,8 @@ function permutedims(t::NDSparse, p::AbstractVector)
     NDSparse(Indexes(map(c->c[ip], cols)...), t.data[ip], t.default)
 end
 
+# getindex
+
 getindex(t::NDSparse, idxs...) = (flush!(t); _getindex(t, idxs))
 
 _getindex{T,D<:Tuple}(t::NDSparse{T,D}, idxs::D) = _getindex_scalar(t, idxs)
@@ -265,6 +268,26 @@ function _getindex(t::NDSparse, idxs)
     end
     NDSparse(K, data, t.default)
 end
+
+# iterators over indices - lazy getindex
+
+function where(d::NDSparse, idxs...)
+    I = d.indexes
+    data = d.data
+    rng = range_estimate(I.columns[1], idxs[1])
+    (data[i] for i in Filter(r->row_in(I[r], idxs), rng))
+end
+
+pairs(d::NDSparse) = (d.indexes[i]=>d.data[i] for i in 1:length(d))
+
+function pairs(d::NDSparse, idxs...)
+    I = d.indexes
+    data = d.data
+    rng = range_estimate(I.columns[1], idxs[1])
+    (I[i]=>data[i] for i in Filter(r->row_in(I[r], idxs), rng))
+end
+
+# setindex!
 
 setindex!(t::NDSparse, rhs, idxs...) = _setindex!(t, rhs, idxs)
 
