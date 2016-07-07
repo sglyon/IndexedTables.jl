@@ -25,8 +25,9 @@ indices for each of the N dimensions.
 As an example, let's construct an array of the high temperatures for three days
 in two cities:
 
+    julia> using Dates
     julia> hitemps = NDSparse([fill("New York",3); fill("Boston",3)],
-                              repmat(Dates.today() + map(Dates.Day, 0:2), 2),
+                              repmat(Date(2016,7,6):Date(2016,7,8), 2),
                               [91,89,91,95,83,76])
     NDSparse{Int64,Tuple{String,Date}}:
      ("Boston",2016-07-06) => 95
@@ -38,6 +39,19 @@ in two cities:
 
 Notice that the data was sorted first by city name, then date, giving a different
 order than we initially provided.
+On construction, `NDSparse` takes ownership of the columns and sorts them in place
+(the original vectors are modified).
+
+## Importing data
+
+Importing data from column-based sources is straightforward.
+For example, csv files can be imported using CSV.jl with the following snippet:
+
+    NDSparse(CSV.read(filename).columns...)
+
+Of course, this assumes the file already has the "data column" in the rightmost
+position.
+If not, the columns can be reordered first.
 
 ## Indexing
 
@@ -45,7 +59,7 @@ Most lookup and filtering operations on `NDSparse` are done via indexing.
 Our `hitemps` array behaves like a 2-d array of integers, accepting two
 indices:
 
-    julia> hitemps["Boston", Dates.Date(2016,7,8)]
+    julia> hitemps["Boston", Date(2016,7,8)]
     76
 
 If the given indices exactly match the element types of the index columns,
@@ -116,3 +130,90 @@ This can be done using `aggregate!`, which operates in place:
 
 The first argument to `aggregate!` specifies a function to use to combine
 values.
+
+`select` also supports filtering columns with arbitrary predicates, by
+passing `column=>predicate` pairs:
+
+    julia> select(hitemps, 2=>isfriday)
+    NDSparse{Int64,Tuple{String,Date}}:
+     ("Boston",2016-07-08) => 76
+     ("New York",2016-07-08) => 91
+
+## Iterators
+
+Indexing makes a copy of the selected data, and therefore can be expensive.
+As an alternative, it is possible to construct an iterator over a subset of
+an `NDSparse`.
+The `where` function accepts the same arguments as indexing, but instead
+returns an iterator that generates the data values at the selected
+locations:
+
+    julia> bos = where(hitemps, "Boston", :);
+    julia> first(bos)
+    95
+
+The `pairs` function is similar, except yields `index=>value` pairs (where
+`index` is a tuple).
+
+## Broadcasting
+
+`broadcast` is used to combine data with slightly different dimensions.
+For example, say we have an array of low temperatures for Boston broken
+down by zip code:
+
+    julia> lotemps = NDSparse(fill("Boston",6),
+                              repeat(Date(2016,7,6):Date(2016,7,8), inner=2),
+                              repmat([02108,02134], 3),
+                              [71,70,67,66,65,66])
+    NDSparse{Int64,Tuple{String,Date,Int64}}:
+     ("Boston",2016-07-06,2108) => 71
+     ("Boston",2016-07-06,2134) => 70
+     ("Boston",2016-07-07,2108) => 67
+     ("Boston",2016-07-07,2134) => 66
+     ("Boston",2016-07-08,2108) => 65
+     ("Boston",2016-07-08,2134) => 66
+
+We want to compute the daily temperature range (high minus low).
+Since we don't have high temperatures available per zip code, we will assume
+the high temperatures are city-wide averages applicable to every zip code.
+The `broadcast` function implements this interpretation of the data,
+automatically repeating data along missing dimensions:
+
+    julia> broadcast((x,y)->y-x, lotemps, hitemps)
+    NDSparse{Int64,Tuple{String,Date,Int64}}:
+     ("Boston",2016-07-06,2108) => 24
+     ("Boston",2016-07-06,2134) => 25
+     ("Boston",2016-07-07,2108) => 16
+     ("Boston",2016-07-07,2134) => 17
+     ("Boston",2016-07-08,2108) => 11
+     ("Boston",2016-07-08,2134) => 10
+
+`broadcast` currently only allows the first argument to have more dimensions,
+so we had to pass a function that subtracts its first argument from its second
+instead of just `-`.
+Notice that `broadcast` also automatically performs an inner join, selecting
+only rows that match.
+
+`broadcast` currently matches dimensions based on element type.
+Specifying dimensions to match manually, or based on column names, is planned
+future functionality.
+
+## Assignment
+
+`NDSparse` supports indexed assignment just like other arrays, but there are
+caveats.
+Since data is stored in a compact, sorted representation, inserting a single
+element is potentially very inefficient (`O(n)`, since it requires moving up to half
+of the existing elements).
+Therefore single-element insertions are accumulated into a temporary buffer to
+amortize cost.
+
+When the next whole-array operation (e.g. indexing or broadcast) is performed,
+the temporary buffer is merged into the main storage.
+This operation is called `flush!`, and can also be invoked explicitly.
+The cost of this operation is `O(n*log(n)) + O(m)`, where `n` is the number
+of inserted items and `m` is the number of existing items.
+This means that the worst case occurs when alternating between inserting a
+small number of items, and performing whole-array operations.
+To the extent possible, insertions should be batched, and in general done
+rarely.
