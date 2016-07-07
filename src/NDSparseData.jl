@@ -248,6 +248,9 @@ function _getindex(t::NDSparse, idxs)
     end
     I = t.indexes
     lI = length(I)
+    for idx in idxs
+        isa(idx, AbstractVector) && (issorted(idx) || error("indexes must be sorted for ranged/vector indexing"))
+    end
     guess = min(idxlen(t,idxs), lI)
     K = Indexes(map(c->_sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
     td = t.data

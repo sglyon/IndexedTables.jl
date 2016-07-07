@@ -50,7 +50,7 @@ function Base.select(arr::NDSparse, conditions::Pair...)
    indxs = 1:length(arr)
    cols = arr.indexes.columns
    for (c,f) in conditions
-      indxs = intersect(indxs, filter(i->f(cols[c][i]), indxs))
+      indxs = filter(i->f(cols[c][i]), indxs)
    end
    NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs], arr.default)
 end
