@@ -198,6 +198,27 @@ only rows that match.
 Specifying dimensions to match manually, or based on column names, is planned
 future functionality.
 
+## Converting dimensions
+
+A location in the coordinate space of an array often has multiple possible
+descriptions.
+This is especially common when describing data at different levels of detail.
+For example, a point in time can be expressed at the level of seconds, minutes,
+or hours.
+In our toy temperature dataset, we might want to look at monthly instead of
+daily highs.
+
+This can be accomplished using the `convertdim` function.
+It accepts an array, a dimension number to convert, a function or dictionary
+to apply to indices in that dimension, and an aggregation function (the
+aggregation function is needed in case the mapping is many-to-one).
+The following call therefore gives monthly high temperatures:
+
+    julia> convertdim(hitemps, 2, month, max)
+    NDSparse{Int64,Tuple{String,Int64}}:
+     ("Boston",7) => 95
+     ("New York",7) => 91
+
 ## Assignment
 
 `NDSparse` supports indexed assignment just like other arrays, but there are

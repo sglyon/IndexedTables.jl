@@ -6,7 +6,8 @@ import Base:
     linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims
 
-export NDSparse, Indexes, WithDefault, flush!, merge, intersect, aggregate!, where, pairs
+export NDSparse, Indexes, WithDefault, flush!, merge, intersect, aggregate!, where,
+    pairs, convertdim
 
 include("utils.jl")
 
@@ -586,14 +587,16 @@ function aggregate!(f, x::NDSparse)
     x
 end
 
-# convert dimension `d` of `x` using the given translation dictionary.
+# convert dimension `d` of `x` using the given translation function.
 # if the relation is many-to-one, aggregate with function `agg`
-function convert_dimension(x::NDSparse, d::Int, xlat::Dict, agg=+)
+function convertdim(x::NDSparse, d::Int, xlat, agg=+)
     cols = x.indexes.columns
-    d2 = map(x->xlat[x], cols[d])
+    d2 = map(xlat, cols[d])
     x2 = NDSparse(map(copy,cols[1:d-1])..., d2, map(copy,cols[d+1:end])..., copy(x.data))
     aggregate!(agg, x2)
 end
+
+convertdim(x::NDSparse, d::Int, xlat::Dict, agg=+) = convertdim(x, d, i->xlat[i], agg)
 
 sum(x::NDSparse) = sum(x.data)
 
