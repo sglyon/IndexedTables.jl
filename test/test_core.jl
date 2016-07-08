@@ -46,7 +46,7 @@ let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], 
     empty!(c)
     @test length(c.indexes) == 0
 
-    c = NDSparseData.convert_dimension(NDSparseData.convert_dimension(a, 1, Dict(12=>10, 21=>20, 32=>20)), 2, Dict(52=>50, 34=>20, 41=>20), -)
+    c = convertdim(convertdim(a, 1, Dict(12=>10, 21=>20, 32=>20)), 2, Dict(52=>50, 34=>20, 41=>20), -)
     @test c[20,20] == 97
 
     c = map(+, a, b)
