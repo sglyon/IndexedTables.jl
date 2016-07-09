@@ -231,9 +231,9 @@ end
 
 # TODO: `countunique` gives a better size estimate but takes quite a while
 #    countunique(t.indexes.columns[n])
-idxlen(t::NDSparse, n::Int, i1, irest...) =
+idxlen(t::NDSparse, n::Integer, i1, irest...) =
     length_estimate(t.indexes.columns[n],i1) * idxlen(t, n+1, irest...)
-idxlen(t::NDSparse, n::Int) = 1
+idxlen(t::NDSparse, n::Integer) = 1
 idxlen(t::NDSparse, idxs) = idxlen(t, 1, idxs...)
 
 range_estimate(col, idx) = 1:length(col)
@@ -248,26 +248,16 @@ _sizehint!{T}(a::Array{T,1}, n::Integer) = (sizehint!(a, n); a)
 _sizehint!(a::AbstractArray, sz::Integer) = a
 
 function _getindex(t::NDSparse, idxs)
-    if length(idxs) != length(t.indexes.columns)
+    I = t.indexes
+    if length(idxs) != length(I.columns)
         error("wrong number of indexes")
     end
-    I = t.indexes
-    lI = length(I)
     for idx in idxs
         isa(idx, AbstractVector) && (issorted(idx) || error("indexes must be sorted for ranged/vector indexing"))
     end
-    guess = min(idxlen(t,idxs), lI)
-    K = Indexes(map(c->_sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
-    td = t.data
-    data = _sizehint!(similar(t.data,0),guess)
-    for i in range_estimate(I.columns[1], idxs[1])
-        ri = I[i]
-        if row_in(ri, idxs)
-            pushrow!(K, ri)
-            push!(data, td[i])
-        end
-    end
-    NDSparse(K, data, t.default)
+    out = convert(Vector{Int32}, range_estimate(I.columns[1], idxs[1]))
+    filter!(i->row_in(I[i], idxs), out)
+    NDSparse(Indexes(map(x->x[out], I.columns)...), t.data[out], t.default)
 end
 
 # iterators over indices - lazy getindex
