@@ -34,17 +34,16 @@ copy(c::Indexes) = Indexes(map(copy, c.columns)...)
 
 row(c::Indexes, i) = ith_all(i, c.columns)
 getindex(c::Indexes, i) = row(c, i)
+
+@inline cmpelts(a, i, j) = (@inbounds x=cmp(a[i], a[j]); x)
+
 @generated function rowless{D,C}(c::Indexes{D,C}, i, j)
     N = length(C.parameters)
-    ex = :()
-    for n in N:-1:1
-        if n == N
-            ex = :(c.columns[$n][i] < c.columns[$n][j])
-        else
-            ex = quote
-                let ei = c.columns[$n][i], ej = c.columns[$n][j]
-                    (ei == ej) ? ($ex) : (ei < ej)
-                end
+    ex = :(cmpelts(c.columns[$N], i, j) < 0)
+    for n in N-1:-1:1
+        ex = quote
+            let d = cmpelts(c.columns[$n], i, j)
+                (d == 0) ? ($ex) : (d < 0)
             end
         end
     end
