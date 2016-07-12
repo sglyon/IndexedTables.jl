@@ -1,3 +1,5 @@
+[![Build Status](https://travis-ci.org/JuliaComputing/NDSparseData.jl.svg?branch=master)](https://travis-ci.org/JuliaComputing/NDSparseData.jl)
+
 # NDSparseData.jl
 N-dimensional sparse array structure in julia
 
