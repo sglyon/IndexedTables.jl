@@ -49,6 +49,17 @@ getindex(c::Indexes, i) = row(c, i)
     ex
 end
 
+@generated function roweq{D,C}(c::Indexes{D,C}, i, j)
+    N = length(C.parameters)
+    ex = :(cmpelts(c.columns[1], i, j) == 0)
+    for n in 2:N
+        ex = quote
+            ($ex) && (cmpelts(c.columns[$n], i, j)==0)
+        end
+    end
+    ex
+end
+
 function ==(x::Indexes, y::Indexes)
     ndims(x) == ndims(y) || return false
     n = length(x)
@@ -227,6 +238,12 @@ range_estimate(col, idx::AbstractArray) = searchsortedfirst(col,first(idx)):sear
 pushrow!(I::Indexes, r) = _pushrow!(I.columns[1], r[1], tail(I.columns), tail(r))
 @inline _pushrow!(c1, r1, cr, rr) = (push!(c1, r1); _pushrow!(cr[1], rr[1], tail(cr), tail(rr)))
 @inline _pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
+
+@inline copyelt!(a, i, j) = (@inbounds a[i] = a[j])
+
+copyrow!(I::Indexes, i, src) = _copyrow!(I.columns[1], tail(I.columns), i, src)
+@inline _copyrow!(c1, cr, i, src) = (copyelt!(c1, i, src); _copyrow!(cr[1], tail(cr), i, src))
+@inline _copyrow!(c1, cr::Tuple{}, i, src) = copyelt!(c1, i, src)
 
 # sizehint, making sure to return first argument
 _sizehint!{T}(a::Array{T,1}, n::Integer) = (sizehint!(a, n); a)
@@ -533,19 +550,17 @@ function aggregate!(f, x::NDSparse)
     idxs, data = x.indexes, x.data
     n = length(idxs)
     newlen = 1
-    current = idxs[newlen]
+    current = newlen
     for i = 2:n
-        if idxs[i] == current
+        if roweq(idxs, i, current)
             data[newlen] = f(data[newlen], data[i])
         else
             newlen += 1
             if newlen != i
                 data[newlen] = data[i]
-                for c in idxs.columns
-                    c[newlen] = c[i]
-                end
+                copyrow!(idxs, newlen, i)
             end
-            current = idxs[newlen]
+            current = newlen
         end
     end
     resize!(data, newlen)

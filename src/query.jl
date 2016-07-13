@@ -45,18 +45,25 @@ end
 # Column-wise filtering (Accepts conditions as column-function pairs)
 # Example: select(arr, 1 => x->x>10, 3 => x->x!=10 ...)
 
+filt_by_col!(f, col, indxs) = filter!(i->f(col[i]), indxs)
+
 function Base.select(arr::NDSparse, conditions::Pair...)
     indxs = [1:length(arr);]
     cols = arr.indexes.columns
     for (c,f) in conditions
-        filter!(i->f(cols[c][i]), indxs)
+        filt_by_col!(f, cols[c], indxs)
     end
     NDSparse(Indexes(map(x->x[indxs], cols)...), arr.data[indxs])
 end
 
 # select a subset of columns
 function Base.select(arr::NDSparse, cols::Int...)
-    NDSparse([copy(arr.indexes.columns[c]) for c in cols]..., copy(arr.data))
+    if issorted(cols)
+        # if no columns are reordered, rows are still sorted
+        NDSparse(Indexes([copy(arr.indexes.columns[c]) for c in cols]...), copy(arr.data))
+    else
+        NDSparse([copy(arr.indexes.columns[c]) for c in cols]..., copy(arr.data))
+    end
 end
 
 # Filter on data field
