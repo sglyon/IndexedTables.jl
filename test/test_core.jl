@@ -50,7 +50,7 @@ let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], 
     @test c[20,20] == 97
 
     c = map(+, a, b)
-    @test length(c.indexes) == 4
+    @test length(c.indexes) == 2
     @test sum(map(-, c, c)) == 0
 end
 

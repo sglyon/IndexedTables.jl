@@ -8,7 +8,7 @@ suite = BenchmarkGroup()
 ###
 
 function copy_unflushed(cols, data)
-   NDSparse(Indexes(map(c->similar(c, 0), cols)...), similar(data, 0), false, Indexes(deepcopy(cols)...), copy(data))
+   NDSparse(Indexes(map(c->similar(c, 0), cols)...), similar(data, 0), Indexes(deepcopy(cols)...), copy(data))
 end
 
 function copy_flushed(cols, data)
@@ -35,7 +35,7 @@ function construction_suite(N::Int, D::Int, cols)
 
    suite = BenchmarkGroup(["Construction"])
    suite["numeric"] = @benchmarkable NDSparse(c..., d) setup=(c = deepcopy($cols); d = copy($numeric_data))
-   suite["mixed"] = @benchmarkable NDSparse(Indexes(c...), d, nothing) setup=(c = deepcopy($cols); d = $mixed_data)
+   suite["mixed"] = @benchmarkable NDSparse(c..., d) setup=(c = deepcopy($cols); d = $mixed_data)
    return suite
 end
 

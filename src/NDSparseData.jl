@@ -6,8 +6,7 @@ import Base:
     linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims
 
-export NDSparse, Indexes, WithDefault, flush!, merge, intersect, aggregate!, where,
-    pairs, convertdim
+export NDSparse, Indexes, flush!, merge, intersect, aggregate!, where, pairs, convertdim
 
 include("utils.jl")
 
@@ -74,21 +73,19 @@ sort!(c::Indexes) = permute!(c, sortperm(c))
 immutable NDSparse{T, D<:Tuple, C<:Tuple, V<:AbstractVector}
     indexes::Indexes{D,C}
     data::V
-    default::T
 
     index_buffer::Indexes{D,C}
     data_buffer::V
 end
 
-NDSparse(i::Indexes, d::AbstractVector, dflt) =
-    NDSparse(i, d, dflt, Indexes(map(c->similar(c, 0), i.columns)...), similar(d, 0))
+NDSparse{T,D,C}(i::Indexes{D,C}, d::AbstractVector{T}) =
+    NDSparse{T,D,C,typeof(d)}(i, d, Indexes(map(c->similar(c, 0), i.columns)...), similar(d, 0))
 
-similar(t::NDSparse) =
-    NDSparse(similar(t.indexes), empty!(similar(t.data)), copy(t.default))
+similar(t::NDSparse) = NDSparse(similar(t.indexes), empty!(similar(t.data)))
 
 function copy(t::NDSparse)
     flush!(t)
-    NDSparse(copy(t.indexes), copy(t.data), copy(t.default))
+    NDSparse(copy(t.indexes), copy(t.data))
 end
 
 function (==)(a::NDSparse, b::NDSparse)
@@ -126,20 +123,9 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     end
 end
 
-immutable WithDefault{T}
-    data::Vector{T}
-    default::T
-end
-
 function NDSparse(columns...)
     keys = columns[1:end-1]
     data = columns[end]
-    if isa(data, WithDefault)
-        dflt = data.default
-        data = data.data
-    else
-        dflt = zero(eltype(data))
-    end
     n = length(data)
     for col in keys
         length(col) == n || error("all columns must have same length")
@@ -150,7 +136,7 @@ function NDSparse(columns...)
         permute!(indexes, p)
         permute!(data, p)
     end
-    NDSparse(indexes, data, dflt)
+    NDSparse(indexes, data)
 end
 
 ndims(t::NDSparse) = ndims(t.indexes)
@@ -174,7 +160,7 @@ function permutedims(t::NDSparse, p::AbstractVector)
     cols = t.indexes.columns[p]
     inew = Indexes(cols...)
     ip = sortperm(inew)
-    NDSparse(Indexes(map(c->c[ip], cols)...), t.data[ip], t.default)
+    NDSparse(Indexes(map(c->c[ip], cols)...), t.data[ip])
 end
 
 # getindex
@@ -186,7 +172,7 @@ _getindex(t::NDSparse, idxs::Tuple{Vararg{Real}}) = _getindex_scalar(t, idxs)
 
 function _getindex_scalar(t, idxs)
     i = searchsorted(t.indexes, idxs)
-    length(i) != 1 && return t.default
+    length(i) != 1 && throw(KeyError(idxs))
     t.data[first(i)]
 end
 
@@ -256,7 +242,7 @@ function _getindex(t::NDSparse, idxs)
     end
     out = convert(Vector{Int32}, range_estimate(I.columns[1], idxs[1]))
     filter!(i->row_in(I[i], idxs), out)
-    NDSparse(Indexes(map(x->x[out], I.columns)...), t.data[out], t.default)
+    NDSparse(Indexes(map(x->x[out], I.columns)...), t.data[out])
 end
 
 # iterators over indices - lazy getindex
@@ -330,7 +316,7 @@ function flush!(t::NDSparse)
         permute!(t.data_buffer, p)
 
         # 2. merge to a new copy
-        new = _merge(t, NDSparse(t.index_buffer, t.data_buffer, t.default))
+        new = _merge(t, NDSparse(t.index_buffer, t.data_buffer))
 
         # 3. resize and copy data into t
         for i = 1:length(t.indexes.columns)
@@ -408,7 +394,6 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
     K = union(x.indexes, y.indexes)
     n = length(K)
     lx, ly = length(x.indexes), length(y.indexes)
-    dflt = x.default
     data = similar(x.data, n)
     i = j = 1
     for k = 1:n
@@ -424,34 +409,33 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
             i += 1
         end
     end
-    NDSparse(K, data, dflt)
+    NDSparse(K, data)
 end
 
 function map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D})
     flush!(x); flush!(y)
-    K = union(x.indexes, y.indexes)
+    K = intersect(x.indexes, y.indexes)
     n = length(K)
     lx, ly = length(x.indexes), length(y.indexes)
-    dflt = f(x.default, y.default)
-    data = Vector{typeof(dflt)}(n)
+    data = Vector{typeof(f(x.data[1],y.data[1]))}(n)
     i = j = 1
     for k = 1:n
-        r = K[k]
-        xval, yval = x.default, y.default
-        if i <= lx && r == x.indexes[i]
-            xval = x.data[i]
+        lt, rt = x.indexes[i], y.indexes[j]
+        c = cmp(lt, rt)
+        if c == 0
+            data[k] = f(x.data[i], y.data[j])
             i += 1
-        end
-        if j <= ly && r == y.indexes[j]
-            yval = y.data[j]
+            j += 1
+        elseif c < 0
+            i += 1
+        else
             j += 1
         end
-        data[k] = f(xval, yval)
     end
-    NDSparse(K, data, dflt)
+    NDSparse(K, data)
 end
 
-map(f, x::NDSparse) = NDSparse(x.indexes, map(f, x.data), f(x.default))
+map(f, x::NDSparse) = NDSparse(x.indexes, map(f, x.data))
 
 tslice(t::Tuple, I) = ntuple(i->t[I[i]], length(I))
 
@@ -474,8 +458,6 @@ function match_indices(A::NDSparse, B::NDSparse)
 end
 
 function broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse)
-    A.default == f(B.default, C.default) ||
-        error("destination default value doesn't match")
     flush!(A); flush!(B); flush!(C)
     B_inds = match_indices(A, B)
     C_inds = match_indices(A, C)
@@ -524,29 +506,26 @@ end
 
 broadcast(f::Function, A::NDSparse, B::NDSparse) = broadcast!(f, similar(A), A, B)
 
-broadcast(f::Function, x::NDSparse, y) = NDSparse(x.indexes, broadcast(f, x.data, y), f(x.default, y))
-broadcast(f::Function, y, x::NDSparse) = NDSparse(x.indexes, broadcast(f, y, x.data), f(y, x.default))
+broadcast(f::Function, x::NDSparse, y) = NDSparse(x.indexes, broadcast(f, x.data, y))
+broadcast(f::Function, y, x::NDSparse) = NDSparse(x.indexes, broadcast(f, y, x.data))
 
 convert(::Type{NDSparse}, m::SparseMatrixCSC) = NDSparse(findnz(m)[[2,1,3]]...)
 
-function convert{T}(::Type{NDSparse}, a::AbstractArray{T}; default::T = zero(eltype(a)))
-    n = 0
-    for x in a; if x!=default; n+=1; end; end
+function convert{T}(::Type{NDSparse}, a::AbstractArray{T})
+    n = length(a)
     data = Vector{T}(n)
     nd = ndims(a)
     idxs = [ Vector{Int}(n) for i = 1:nd ]
     i = 1
     for I in CartesianRange(size(a))
         val = a[I]
-        if val != default
-            for j = 1:nd
-                idxs[j][i] = I[j]
-            end
-            data[i] = val
-            i += 1
+        for j = 1:nd
+            idxs[j][i] = I[j]
         end
+        data[i] = val
+        i += 1
     end
-    NDSparse(Indexes(reverse(idxs)...), data, default)
+    NDSparse(Indexes(reverse(idxs)...), data)
 end
 
 # combine adjacent rows with equal indexes using the given function
