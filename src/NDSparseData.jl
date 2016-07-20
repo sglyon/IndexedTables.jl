@@ -1,7 +1,7 @@
 module NDSparseData
 
 import Base:
-    show, summary, eltype, length, sortperm, issorted, permute!, sort!,
+    show, summary, eltype, length, sortperm, issorted, permute!, sort, sort!,
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
     linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims
@@ -33,6 +33,8 @@ copy(c::Indexes) = Indexes(map(copy, c.columns)...)
 
 row(c::Indexes, i) = ith_all(i, c.columns)
 getindex(c::Indexes, i) = row(c, i)
+
+getindex(c::Indexes, p::AbstractVector) = Indexes(map(c->c[p], c.columns)...)
 
 @inline cmpelts(a, i, j) = (@inbounds x=cmp(a[i], a[j]); x)
 
@@ -75,11 +77,12 @@ issorted(c::Indexes) = issorted(1:length(c), lt=(x,y)->rowless(c, x, y))
 
 function permute!(c::Indexes, p::AbstractVector)
     for v in c.columns
-        permute!(v, p)
+        copy!(v, v[p])
     end
     return c
 end
 sort!(c::Indexes) = permute!(c, sortperm(c))
+sort(c::Indexes) = c[sortperm(c)]
 
 immutable NDSparse{T, D<:Tuple, C<:Tuple, V<:AbstractVector}
     indexes::Indexes{D,C}
@@ -144,8 +147,8 @@ function NDSparse(columns...)
     indexes = Indexes(keys...)
     if !issorted(indexes)
         p = sortperm(indexes)
-        permute!(indexes, p)
-        permute!(data, p)
+        indexes = indexes[p]
+        data = data[p]
     end
     NDSparse(indexes, data)
 end
@@ -162,8 +165,13 @@ done(a::NDSparse, st) = done(a.data, st)
 function sort!(t::NDSparse)
     p = sortperm(t.indexes)
     permute!(t.indexes, p)
-    permute!(t.data, p)
+    copy!(t.data, t.data[p])
     return t
+end
+
+function sort(t::NDSparse)
+    p = sortperm(t.indexes)
+    return NDSparse(t.indexes[p], t.data[p])
 end
 
 function permutedims(t::NDSparse, p::AbstractVector)
@@ -329,11 +337,11 @@ function flush!(t::NDSparse)
     if !isempty(t.data_buffer)
         # 1. sort the buffer
         p = sortperm(t.index_buffer)
-        permute!(t.index_buffer, p)
-        permute!(t.data_buffer, p)
+        ibuf = t.index_buffer[p]
+        dbuf = t.data_buffer[p]
 
         # 2. merge to a new copy
-        new = _merge(t, NDSparse(t.index_buffer, t.data_buffer))
+        new = _merge(t, NDSparse(ibuf, dbuf))
 
         # 3. resize and copy data into t
         for i = 1:length(t.indexes.columns)
