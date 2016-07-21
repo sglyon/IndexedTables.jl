@@ -9,6 +9,7 @@ let a = Indexes([1,2,1],["foo","bar","baz"]),
     @test b != c
     @test sort!(a) == sort!(b) == sort!(c)
     @test size(a) == size(b) == size(c) == (3,)
+    @test eltype(a) == Tuple{Int,String}
 end
 
 let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
@@ -26,6 +27,7 @@ let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
     f = Indexes([1,1,1], sort([rand(),0.5,rand()]))
     @test intersect(c,d) == Indexes([1,2],[1,5])
     @test length(intersect(e,f).columns[1]) == 1
+    @test eltype(c) == Tuple{Int,Int}
 end
 
 srand(123)
@@ -34,6 +36,7 @@ B = NDSparse(map(UInt8,rand(1:3,10)), rand('A':'F',10), rand(1:3,10), randn(10))
 C = NDSparse(map(UInt8,rand(1:3,10)), rand(1:3,10), rand(1:3,10), randn(10))
 
 let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
+    @test eltype(a) == Int
     @test sum(a) == 214
 
     c = similar(a)
@@ -52,6 +55,8 @@ let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], 
     c = map(+, a, b)
     @test length(c.indexes) == 2
     @test sum(map(-, c, c)) == 0
+
+    @test map(iseven, a) == NDSparse([12,21,32], [52,41,34], [false,false,true])
 end
 
 let S = spdiagm(1:5)
@@ -77,7 +82,11 @@ let a = rand(10), b = rand(10), c = rand(10)
 end
 
 let a = rand(10), b = rand(10), c = rand(10), d = rand(10)
-    @test permutedims(NDSparse(a,b,c,d),[3,1,2]) == NDSparse(c,a,b,d)
+    local nd = NDSparse(a,b,c,d)
+    @test permutedims(nd,[3,1,2]) == NDSparse(c,a,b,d)
+    @test_throws ArgumentError permutedims(nd, [1,2])
+    @test_throws ArgumentError permutedims(nd, [1,3])
+    @test_throws ArgumentError permutedims(nd, [1,2,2])
 end
 
 let r=1:5, s=1:2:5
@@ -94,4 +103,12 @@ end
 
 let a = NDSparse([1,2,2,3,4,5], [1,2,2,3,4,5], [1,2,20,3,4,5], agg=+)
     @test a == NDSparse([1,2,3,4,5], [1,2,3,4,5], [1,22,3,4,5])
+end
+
+let a = rand(5,5,5)
+    for dims in ([2,3], [1], [2])
+        @test reducedim(+, convert(NDSparse,a), 4-dims) == convert(NDSparse,
+                                                                   squeeze(reducedim(+, a, dims), (dims...,)))
+    end
+    @test_throws ArgumentError reducedim(+, convert(NDSparse,a), [1,2,3])
 end

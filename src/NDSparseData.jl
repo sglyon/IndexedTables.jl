@@ -17,7 +17,6 @@ Indexes(columns::AbstractVector...) =
     Indexes{eltypes(typeof(columns)),typeof(columns)}(columns)
 
 eltype{D,C}(::Type{Indexes{D,C}}) = D
-dimensions{D,C}(::Type{Indexes{D,C}}) = D
 length(c::Indexes) = length(c.columns[1])
 ndims(c::Indexes) = length(c.columns)
 size(c::Indexes) = (length(c),)
@@ -154,9 +153,8 @@ function NDSparse(columns...; agg=nothing)
 end
 
 ndims(t::NDSparse) = ndims(t.indexes)
-dimensions(t::NDSparse) = dimensions(t.indexes)
 length(t::NDSparse) = (flush!(t);length(t.indexes))
-eltype{T,D,C}(::Type{NDSparse{T,D,C}}) = T
+eltype{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = T
 
 start(a::NDSparse) = start(a.data)
 next(a::NDSparse, st) = next(a.data, st)
