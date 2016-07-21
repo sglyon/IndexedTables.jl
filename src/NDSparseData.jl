@@ -4,7 +4,7 @@ import Base:
     show, summary, eltype, length, sortperm, issorted, permute!, sort, sort!,
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
     linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
-    permutedims
+    permutedims, reducedim
 
 export NDSparse, Indexes, flush!, aggregate!, where, pairs, convertdim
 
@@ -136,7 +136,7 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     end
 end
 
-function NDSparse(columns...)
+function NDSparse(columns...; agg=nothing)
     keys = columns[1:end-1]
     data = columns[end]
     n = length(data)
@@ -149,7 +149,8 @@ function NDSparse(columns...)
         indexes = indexes[p]
         data = data[p]
     end
-    NDSparse(indexes, data)
+    nd = NDSparse(indexes, data)
+    agg===nothing ? nd : aggregate!(agg, nd)
 end
 
 ndims(t::NDSparse) = ndims(t.indexes)
@@ -556,16 +557,25 @@ end
 
 # convert dimension `d` of `x` using the given translation function.
 # if the relation is many-to-one, aggregate with function `agg`
-function convertdim(x::NDSparse, d::Int, xlat, agg=+)
+function convertdim(x::NDSparse, d::Int, xlat; agg=nothing)
     cols = x.indexes.columns
     d2 = map(xlat, cols[d])
-    x2 = NDSparse(map(copy,cols[1:d-1])..., d2, map(copy,cols[d+1:end])..., copy(x.data))
-    aggregate!(agg, x2)
+    NDSparse(map(copy,cols[1:d-1])..., d2, map(copy,cols[d+1:end])..., copy(x.data), agg=agg)
 end
 
-convertdim(x::NDSparse, d::Int, xlat::Dict, agg=+) = convertdim(x, d, i->xlat[i], agg)
+convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing) = convertdim(x, d, i->xlat[i], agg=agg)
+
+convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
 
 sum(x::NDSparse) = sum(x.data)
+
+function reducedim(f, x::NDSparse, dims)
+    keep = setdiff([1:ndims(x);], dims)
+    if isempty(keep)
+        throw(ArgumentError("to remove all dimensions, use `reduce(f, A)`"))
+    end
+    select(x, keep..., agg=f)
+end
 
 include("query.jl")
 
