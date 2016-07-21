@@ -6,7 +6,7 @@ import Base:
     linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims
 
-export NDSparse, Indexes, flush!, merge, intersect, aggregate!, where, pairs, convertdim
+export NDSparse, Indexes, flush!, aggregate!, where, pairs, convertdim
 
 include("utils.jl")
 
@@ -31,8 +31,7 @@ copy(c::Indexes) = Indexes(map(copy, c.columns)...)
 @inline ith_all(i, ::Tuple{}) = ()
 @inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
-row(c::Indexes, i) = ith_all(i, c.columns)
-getindex(c::Indexes, i) = row(c, i)
+getindex(c::Indexes, i) = ith_all(i, c.columns)
 
 getindex(c::Indexes, p::AbstractVector) = Indexes(map(c->c[p], c.columns)...)
 
@@ -67,7 +66,7 @@ function ==(x::Indexes, y::Indexes)
     n = length(x)
     length(y) == n || return false
     for i in 1:n
-        row(x,i) == row(y,i) || return false
+        x[i] == y[i] || return false
     end
     return true
 end
@@ -126,13 +125,13 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     n = length(t.indexes)
     for i in 1:min(n,10)
         println(io)
-        print(io, " $(row(t.indexes, i)) => $(t.data[i])")
+        print(io, " $(t.indexes[i]) => $(t.data[i])")
     end
     if n > 20
         println(); print(" ⋮")
         for i in (n-9):n
             println(io)
-            print(io, " $(row(t.indexes, i)) => $(t.data[i])")
+            print(io, " $(t.indexes[i]) => $(t.data[i])")
         end
     end
 end
@@ -162,24 +161,20 @@ start(a::NDSparse) = start(a.data)
 next(a::NDSparse, st) = next(a.data, st)
 done(a::NDSparse, st) = done(a.data, st)
 
-function sort!(t::NDSparse)
+# ensure array is in correct storage order -- meant for internal use
+function order!(t::NDSparse)
     p = sortperm(t.indexes)
     permute!(t.indexes, p)
     copy!(t.data, t.data[p])
     return t
 end
 
-function sort(t::NDSparse)
-    p = sortperm(t.indexes)
-    return NDSparse(t.indexes[p], t.data[p])
-end
-
 function permutedims(t::NDSparse, p::AbstractVector)
+    if !(length(p) == ndims(t) && isperm(p))
+        throw(ArgumentError("argument to permutedims must be a valid permutation"))
+    end
     flush!(t)
-    cols = t.indexes.columns[p]
-    inew = Indexes(cols...)
-    ip = sortperm(inew)
-    NDSparse(Indexes(map(c->c[ip], cols)...), t.data[ip])
+    NDSparse(t.indexes.columns[p]..., t.data)
 end
 
 # getindex
@@ -439,28 +434,7 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
     NDSparse(K, data)
 end
 
-function map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D})
-    flush!(x); flush!(y)
-    K = intersect(x.indexes, y.indexes)
-    n = length(K)
-    lx, ly = length(x.indexes), length(y.indexes)
-    data = Vector{typeof(f(x.data[1],y.data[1]))}(n)
-    i = j = 1
-    for k = 1:n
-        lt, rt = x.indexes[i], y.indexes[j]
-        c = cmp(lt, rt)
-        if c == 0
-            data[k] = f(x.data[i], y.data[j])
-            i += 1
-            j += 1
-        elseif c < 0
-            i += 1
-        else
-            j += 1
-        end
-    end
-    NDSparse(K, data)
-end
+map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D}) = naturaljoin(x, y, f)
 
 map(f, x::NDSparse) = NDSparse(x.indexes, map(f, x.data))
 
@@ -526,7 +500,7 @@ function broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse)
         end
         jlo, klo = jhi, khi
     end
-    sort!(A)
+    order!(A)
 end
 
 # TODO: allow B to subsume columns of A as well?

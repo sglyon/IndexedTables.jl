@@ -5,6 +5,7 @@ export naturaljoin
 # Natural Join (Both NDSParse arrays must have the same number of columns, in the same order)
 
 function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
+   flush!(left); flush!(right)
    lI = left.indexes
    rI = right.indexes
    lD = left.data
@@ -17,7 +18,7 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
 
    # Initialize output array components
    I = Indexes(map(c->_sizehint!(similar(c,0), guess), lI.columns)...)
-   data = _sizehint!(similar(lD, 0), guess)
+   data = _sizehint!(similar(lD, typeof(op(lD[1],rD[1])), 0), guess)
 
    # Match and insert rows
    i = j = 1
@@ -48,6 +49,7 @@ end
 filt_by_col!(f, col, indxs) = filter!(i->f(col[i]), indxs)
 
 function Base.select(arr::NDSparse, conditions::Pair...)
+    flush!(arr)
     indxs = [1:length(arr);]
     cols = arr.indexes.columns
     for (c,f) in conditions
@@ -58,6 +60,7 @@ end
 
 # select a subset of columns
 function Base.select(arr::NDSparse, cols::Int...)
+    flush!(arr)
     if issorted(cols)
         # if no columns are reordered, rows are still sorted
         NDSparse(Indexes([copy(arr.indexes.columns[c]) for c in cols]...), copy(arr.data))
@@ -68,6 +71,7 @@ end
 
 # Filter on data field
 function Base.filter(fn::Function, arr::NDSparse)
+   flush!(arr)
    cols = arr.indexes.columns
    data = arr.data
    indxs = filter(i->fn(data[i]), eachindex(data))
