@@ -339,9 +339,11 @@ function flush!(t::NDSparse)
         p = sortperm(t.index_buffer)
         ibuf = t.index_buffer[p]
         dbuf = t.data_buffer[p]
+        temp = NDSparse(ibuf, dbuf)
+        aggregate!((x,y)->y, temp)  # keep later values only
 
         # 2. merge to a new copy
-        new = _merge(t, NDSparse(ibuf, dbuf))
+        new = _merge(t, temp)
 
         # 3. resize and copy data into t
         for i = 1:length(t.indexes.columns)

@@ -84,3 +84,10 @@ let r=1:5, s=1:2:5
     A = NDSparse([r;], [r;], [r;])
     @test A[s, :] == NDSparse([s;], [s;], [s;])
 end
+
+# issue #15
+let a = NDSparse([1,2,3,4], [1,2,3,4], [1,2,3,4])
+    a[5,5] = 5
+    a[5,5] = 6
+    @test a[5,5] == 6
+end
