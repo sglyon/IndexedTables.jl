@@ -61,13 +61,7 @@ end
 # select a subset of columns
 function Base.select(arr::NDSparse, cols::Int...; agg=nothing)
     flush!(arr)
-    if issorted(cols)
-        # if no columns are reordered, rows are still sorted
-        nd = NDSparse(Indexes([copy(arr.indexes.columns[c]) for c in cols]...), copy(arr.data))
-        return agg===nothing ? nd : aggregate!(agg, nd)
-    else
-        return NDSparse([copy(arr.indexes.columns[c]) for c in cols]..., copy(arr.data), agg=agg)
-    end
+    return NDSparse([copy(arr.indexes.columns[c]) for c in cols]..., copy(arr.data), agg=agg)
 end
 
 # Filter on data field

@@ -16,3 +16,8 @@ let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], 
     @test c[32,34] == 150
     @test length(c.indexes) == 1
 end
+
+let a = NDSparse([1,1,2,2], [1,2,1,2], [6,7,8,9])
+    @test select(a, 1, agg=+) == NDSparse([1,2], [13,17])
+    @test select(a, 2, agg=+) == NDSparse([1,2], [14,16])
+end

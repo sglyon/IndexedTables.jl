@@ -204,38 +204,6 @@ row_in(r, idxs) = row_in(r[1], idxs[1], tail(r), tail(idxs))
 @inline row_in(r1, i1, rr, ri) = _in(r1,i1) & row_in(rr[1], ri[1], tail(rr), tail(ri))
 @inline row_in(r1, i1, rr::Tuple{}, ri) = _in(r1,i1)
 
-function countunique(C)
-    seen = Set{eltype(C)}()
-    for x in C
-        push!(seen, x)
-    end
-    length(seen)
-end
-
-length_estimate(col, idx::AbstractArray) = length(idx)
-length_estimate(col, idx) = 1
-length_estimate(col, idx::Colon) = 1
-function length_estimate(col, idx::Interval)
-    count = 0
-    for i = 1:length(col)
-        x = col[i]
-        if i>1 && isless(x,col[i-1])
-            break
-        end
-        if x in idx
-            count += 1
-        end
-    end
-    return max(1,count)
-end
-
-# TODO: `countunique` gives a better size estimate but takes quite a while
-#    countunique(t.indexes.columns[n])
-idxlen(t::NDSparse, n::Integer, i1, irest...) =
-    length_estimate(t.indexes.columns[n],i1) * idxlen(t, n+1, irest...)
-idxlen(t::NDSparse, n::Integer) = 1
-idxlen(t::NDSparse, idxs) = idxlen(t, 1, idxs...)
-
 range_estimate(col, idx) = 1:length(col)
 range_estimate(col, idx::AbstractArray) = searchsortedfirst(col,first(idx)):searchsortedlast(col,last(idx))
 
