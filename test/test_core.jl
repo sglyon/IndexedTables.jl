@@ -94,6 +94,22 @@ let r=1:5, s=1:2:5
     @test A[s, :] == NDSparse([s;], [s;], [s;])
 end
 
+let a = NDSparse([1,2,2,2], [1,2,3,4], [10,9,8,7])
+    @test a[2,:] == NDSparse([2,2,2], [2,3,4], [9,8,7])
+    @test a[:,1] == NDSparse([1], [1], [10])
+    @test collect(where(a, 2, :)) == [9,8,7]
+end
+
+let a = NDSparse([1,2,2,2], [1,2,3,4], zeros(4))
+    a2 = copy(a); a3 = copy(a)
+    #a[2,:] = 1
+    #@test a == NDSparse([1,2,2,2], [1,2,3,4], Float64[0,1,1,1])
+    a2[2,[2,3]] = 1
+    @test a2 == NDSparse([1,2,2,2], [1,2,3,4], Float64[0,1,1,0])
+    a3[2,[2,3]] = [8,9]
+    @test a3 == NDSparse([1,2,2,2], [1,2,3,4], Float64[0,8,9,0])
+end
+
 # issue #15
 let a = NDSparse([1,2,3,4], [1,2,3,4], [1,2,3,4])
     a[5,5] = 5

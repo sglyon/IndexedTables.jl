@@ -252,7 +252,8 @@ end
 
 # setindex!
 
-setindex!(t::NDSparse, rhs, idxs...) = _setindex!(t, rhs, idxs)
+setindex!(t::NDSparse, rhs, idxs...) = _setindex!(t, rhs, fixi(t, idxs))
+setindex!(t::NDSparse, rhs, idxs::Real...) = _setindex!(t, rhs, idxs)
 
 _setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs::D) = _setindex_scalar!(t, rhs, idxs)
 _setindex!(t::NDSparse, rhs::AbstractArray, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
@@ -277,10 +278,7 @@ fixi(t::NDSparse, n::Int, i1, irest...) = (i1, fixi(t, n+1, irest...)...)
 fixi(t::NDSparse, n::Int) = ()
 fixi(t::NDSparse, idxs) = fixi(t, 1, idxs...)
 
-_setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs) =
-    _setindex_array_range!(t, rhs, fixi(t, idxs))
-
-function _setindex_array_range!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs)
+function _setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs)
     # TODO performance
     for (x,I) in zip(rhs,product(idxs...))
         _setindex!(t, x, convert(D, I))

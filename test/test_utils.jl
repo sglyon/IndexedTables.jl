@@ -2,6 +2,12 @@ using Base.Test
 using NDSparseData
 
 let lo=1, hi=10
+    I = NDSparseData.Interval(lo, hi)
+    @test lo in I
+    @test hi in I
+    @test !(hi+1 in I)
+    @test !(lo-1 in I)
+    @test  (lo+1 in I)
     for left in [true, false]
         for right in [true, false]
             I = NDSparseData.Interval{Int,left,right}(lo, hi)
@@ -13,6 +19,17 @@ let lo=1, hi=10
         end
     end
 end
+
+import NDSparseData: @dimension, Dimension
+
+@dimension Year
+@test Year(1) == Year(1)
+@test Year(1) != Year(2)
+@test isless(Year(1), Year(2))
+@test !isless(Year(2), Year(1))
+@test repr(Year(2016)) == "Year(2016)"
+@test convert(Int, Year(2000)) === 2000
+@test convert(Year, 1999) === Year(1999)
 
 let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
     p = collect(NDSparseData.product(a, b))
