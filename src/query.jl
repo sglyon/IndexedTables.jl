@@ -27,7 +27,7 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
       lt, rt = lI[i], rI[j]
       c = cmp(lt, rt)
       if c == 0
-         pushrow!(I, lt)
+         push!(I, lt)
          push!(data, op(lD[i], rD[j]))
          i += 1
          j += 1

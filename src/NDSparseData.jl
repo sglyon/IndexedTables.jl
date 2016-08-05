@@ -4,7 +4,7 @@ import Base:
     show, summary, eltype, length, sortperm, issorted, permute!, sort, sort!,
     getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
     linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
-    permutedims, reducedim
+    permutedims, reducedim, push!
 
 export NDSparse, Indexes, flush!, aggregate!, where, pairs, convertdim
 
@@ -18,7 +18,7 @@ Indexes(columns::AbstractVector...) =
 
 eltype{D,C}(::Type{Indexes{D,C}}) = D
 length(c::Indexes) = length(c.columns[1])
-ndims(c::Indexes) = length(c.columns)
+ndims(c::Indexes) = 1
 size(c::Indexes) = (length(c),)
 linearindexing{T<:Indexes}(::Type{T}) = Base.LinearFast()
 summary{D<:Tuple}(c::Indexes{D}) = "Indexes{$D}"
@@ -33,6 +33,14 @@ copy(c::Indexes) = Indexes(map(copy, c.columns)...)
 getindex(c::Indexes, i) = ith_all(i, c.columns)
 
 getindex(c::Indexes, p::AbstractVector) = Indexes(map(c->c[p], c.columns)...)
+
+setindex!(I::Indexes, r::Tuple, i) = (_setindex!(I.columns[1], r[1], i, tail(I.columns), tail(r)); I)
+@inline _setindex!(c1, r1, i, cr, rr) = (c1[i]=r1; _setindex!(cr[1], rr[1], i, tail(cr), tail(rr)))
+@inline _setindex!(c1, r1, i, cr::Tuple{}, rr) = (c1[i] = r1)
+
+push!(I::Indexes, r::Tuple) = _pushrow!(I.columns[1], r[1], tail(I.columns), tail(r))
+@inline _pushrow!(c1, r1, cr, rr) = (push!(c1, r1); _pushrow!(cr[1], rr[1], tail(cr), tail(rr)))
+@inline _pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
 
 @inline cmpelts(a, i, j) = (@inbounds x=cmp(a[i], a[j]); x)
 
@@ -61,7 +69,7 @@ end
 end
 
 function ==(x::Indexes, y::Indexes)
-    ndims(x) == ndims(y) || return false
+    length(x.columns) == length(y.columns) || return false
     n = length(x)
     length(y) == n || return false
     for i in 1:n
@@ -152,7 +160,7 @@ function NDSparse(columns...; agg=nothing)
     agg===nothing ? nd : aggregate!(agg, nd)
 end
 
-ndims(t::NDSparse) = ndims(t.indexes)
+ndims(t::NDSparse) = length(t.indexes.columns)
 length(t::NDSparse) = (flush!(t);length(t.indexes))
 eltype{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = T
 
@@ -204,10 +212,6 @@ row_in(r, idxs) = row_in(r[1], idxs[1], tail(r), tail(idxs))
 
 range_estimate(col, idx) = 1:length(col)
 range_estimate(col, idx::AbstractArray) = searchsortedfirst(col,first(idx)):searchsortedlast(col,last(idx))
-
-pushrow!(I::Indexes, r) = _pushrow!(I.columns[1], r[1], tail(I.columns), tail(r))
-@inline _pushrow!(c1, r1, cr, rr) = (push!(c1, r1); _pushrow!(cr[1], rr[1], tail(cr), tail(rr)))
-@inline _pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
 
 @inline copyelt!(a, i, j) = (@inbounds a[i] = a[j])
 
@@ -261,7 +265,7 @@ _setindex!{T,D}(t::NDSparse{T,D}, rhs, idxs::D) = _setindex_scalar!(t, rhs, idxs
 #_setindex!(t::NDSparse, rhs, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
 
 function _setindex_scalar!(t, rhs, idxs)
-    pushrow!(t.index_buffer, idxs)
+    push!(t.index_buffer, idxs)
     push!(t.data_buffer, rhs)
     t
 end
@@ -330,21 +334,21 @@ function union{D}(I::Indexes{D}, J::Indexes{D})
             ri, rj = I[i], J[j]
             c = cmp(ri, rj)
             if c == 0
-                pushrow!(K, ri)
+                push!(K, ri)
                 i += 1
                 j += 1
             elseif c < 0
-                pushrow!(K, ri)
+                push!(K, ri)
                 i += 1
             else
-                pushrow!(K, rj)
+                push!(K, rj)
                 j += 1
             end
         elseif i <= lI
-            pushrow!(K, I[i])
+            push!(K, I[i])
             i += 1
         elseif j <= lJ
-            pushrow!(K, J[j])
+            push!(K, J[j])
             j += 1
         else
             break
@@ -362,7 +366,7 @@ function intersect{D}(I::Indexes{D}, J::Indexes{D})
         ri, rj = I[i], J[j]
         c = cmp(ri, rj)
         if c == 0
-            pushrow!(K, ri)
+            push!(K, ri)
             i += 1
             j += 1
         elseif c < 0
@@ -459,7 +463,7 @@ function broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse)
                 vals = ntuple(ndims(A)) do i
                     B_inds[i] > 0 ? b_row[B_inds[i]] : c_row[C_inds[i]]
                 end
-                pushrow!(A.indexes, vals)
+                push!(A.indexes, vals)
                 push!(A.data, f(B.data[j], C.data[k]))
             end
         end
