@@ -8,7 +8,7 @@ suite = BenchmarkGroup()
 ###
 
 function copy_unflushed(cols, data)
-   NDSparse(Indexes(map(c->similar(c, 0), cols)...), similar(data, 0), Indexes(deepcopy(cols)...), copy(data))
+   NDSparse(Columns(map(c->similar(c, 0), cols)...), similar(data, 0), Columns(deepcopy(cols)...), copy(data))
 end
 
 function copy_flushed(cols, data)

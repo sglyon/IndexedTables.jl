@@ -1,9 +1,9 @@
 using Base.Test
 using NDSparseData
 
-let a = Indexes([1,2,1],["foo","bar","baz"]),
-    b = Indexes([2,1,1],["bar","baz","foo"]),
-    c = Indexes([1,1,2],["foo","baz","bar"])
+let a = Columns([1,2,1],["foo","bar","baz"]),
+    b = Columns([2,1,1],["bar","baz","foo"]),
+    c = Columns([1,1,2],["foo","baz","bar"])
     @test a != b
     @test a != c
     @test b != c
@@ -12,20 +12,20 @@ let a = Indexes([1,2,1],["foo","bar","baz"]),
     @test eltype(a) == Tuple{Int,String}
 end
 
-let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
-    d = Indexes([1,1,2,2,2], [1,3,1,4,5]),
-    e = Indexes([1,1,1], sort([rand(),0.5,rand()])),
-    f = Indexes([1,1,1], sort([rand(),0.5,rand()]))
-    @test merge(NDSparse(c,ones(5)),NDSparse(d,ones(5))).indexes == Indexes([1,1,1,1,2,2,2,2],[1,2,3,4,1,3,4,5])
+let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
+    d = Columns([1,1,2,2,2], [1,3,1,4,5]),
+    e = Columns([1,1,1], sort([rand(),0.5,rand()])),
+    f = Columns([1,1,1], sort([rand(),0.5,rand()]))
+    @test merge(NDSparse(c,ones(5)),NDSparse(d,ones(5))).index == Columns([1,1,1,1,2,2,2,2],[1,2,3,4,1,3,4,5])
     @test length(merge(NDSparse(e,ones(3)),NDSparse(f,ones(3)))) == 5
-    @test summary(c) == "Indexes{Tuple{Int64,Int64}}"
+    @test summary(c) == "Columns{Tuple{Int64,Int64}}"
 end
 
-let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
-    d = Indexes([1,1,2,2,2], [1,3,1,4,5]),
-    e = Indexes([1,1,1], sort([rand(),0.5,rand()])),
-    f = Indexes([1,1,1], sort([rand(),0.5,rand()]))
-    @test map(+,NDSparse(c,ones(5)),NDSparse(d,ones(5))).indexes == Indexes([1,2],[1,5])
+let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
+    d = Columns([1,1,2,2,2], [1,3,1,4,5]),
+    e = Columns([1,1,1], sort([rand(),0.5,rand()])),
+    f = Columns([1,1,1], sort([rand(),0.5,rand()]))
+    @test map(+,NDSparse(c,ones(5)),NDSparse(d,ones(5))).index == Columns([1,2],[1,5])
     @test length(map(+,NDSparse(e,ones(3)),NDSparse(f,ones(3)))) == 1
     @test eltype(c) == Tuple{Int,Int}
 end
@@ -41,19 +41,19 @@ let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], 
 
     c = similar(a)
     @test typeof(c) == typeof(a)
-    @test length(c.indexes) == 0
+    @test length(c.index) == 0
 
     c = copy(a)
     @test typeof(c) == typeof(a)
-    @test length(c.indexes) == length(a.indexes)
+    @test length(c.index) == length(a.index)
     empty!(c)
-    @test length(c.indexes) == 0
+    @test length(c.index) == 0
 
     c = convertdim(convertdim(a, 1, Dict(12=>10, 21=>20, 32=>20)), 2, Dict(52=>50, 34=>20, 41=>20), -)
     @test c[20,20] == 97
 
     c = map(+, a, b)
-    @test length(c.indexes) == 2
+    @test length(c.index) == 2
     @test sum(map(-, c, c)) == 0
 
     @test map(iseven, a) == NDSparse([12,21,32], [52,41,34], [false,false,true])
