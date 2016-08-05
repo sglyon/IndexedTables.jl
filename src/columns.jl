@@ -6,11 +6,26 @@ import Base:
 
 export Columns
 
-immutable Columns{D<:Tuple, C<:Tuple} <: AbstractVector{D}
+immutable Columns{D<:Union{Tuple,NamedTuple}, C<:Tuple} <: AbstractVector{D}
     columns::C
 end
-Columns(columns::AbstractVector...) =
-    Columns{eltypes(typeof(columns)),typeof(columns)}(columns)
+
+function Columns(cols::AbstractVector...; names::Union{Vector{Symbol},Tuple{Vararg{Symbol}},Void}=nothing)
+    if isa(names, Void)
+        Columns{eltypes(typeof(cols)),typeof(cols)}(cols)
+    else
+        et = eval(:(@NT($(names...)))){map(eltype, cols)...}
+        Columns{et,typeof(cols)}(cols)
+    end
+end
+
+Columns(; pairs...) = Columns(map(x->x[2],pairs)..., names=Symbol[x[1] for x in pairs])
+
+(::Type{Columns{D}}){D}(columns::AbstractVector...) = Columns{D,typeof(columns)}(columns)
+
+@generated function astuple(n::NamedTuple)
+    Expr(:tuple, [ Expr(:., :n, Expr(:quote, fieldname(n,i))) for i = 1:nfields(n) ]...)
+end
 
 eltype{D,C}(::Type{Columns{D,C}}) = D
 length(c::Columns) = length(c.columns[1])
@@ -20,16 +35,17 @@ linearindexing{T<:Columns}(::Type{T}) = Base.LinearFast()
 summary{D<:Tuple}(c::Columns{D}) = "Columns{$D}"
 
 empty!(c::Columns) = (map(empty!, c.columns); c)
-similar(c::Columns) = empty!(Columns(map(similar, c.columns)...))
-similar(c::Columns, n::Integer) = Columns(map(a->similar(a,n), c.columns)...)
-copy(c::Columns) = Columns(map(copy, c.columns)...)
+similar{D}(c::Columns{D}) = empty!(Columns{D}(map(similar, c.columns)...))
+similar{D}(c::Columns{D}, n::Integer) = Columns{D}(map(a->similar(a,n), c.columns)...)
+copy{D}(c::Columns{D}) = Columns{D}(map(copy, c.columns)...)
 
 @inline ith_all(i, ::Tuple{}) = ()
 @inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
-getindex(c::Columns, i) = ith_all(i, c.columns)
+getindex{D<:Tuple}(c::Columns{D}, i::Integer) = ith_all(i, c.columns)
+getindex{D<:NamedTuple}(c::Columns{D}, i::Integer) = D(ith_all(i, c.columns)...)
 
-getindex(c::Columns, p::AbstractVector) = Columns(map(c->c[p], c.columns)...)
+getindex{D}(c::Columns{D}, p::AbstractVector) = Columns{D}(map(c->c[p], c.columns)...)
 
 setindex!(I::Columns, r::Tuple, i) = (_setindex!(I.columns[1], r[1], i, tail(I.columns), tail(r)); I)
 @inline _setindex!(c1, r1, i, cr, rr) = (c1[i]=r1; _setindex!(cr[1], rr[1], i, tail(cr), tail(rr)))

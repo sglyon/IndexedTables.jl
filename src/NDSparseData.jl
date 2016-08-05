@@ -1,5 +1,7 @@
 module NDSparseData
 
+using NamedTuples
+
 import Base:
     show, eltype, length, getindex, setindex!, ndims, map, convert,
     ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
@@ -10,7 +12,7 @@ export NDSparse, flush!, aggregate!, where, pairs, convertdim
 include("utils.jl")
 include("columns.jl")
 
-immutable NDSparse{T, D<:Tuple, C<:Tuple, V<:AbstractVector}
+immutable NDSparse{T, D<:Union{Tuple,NamedTuple}, C<:Tuple, V<:AbstractVector}
     index::Columns{D,C}
     data::V
 
