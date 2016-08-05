@@ -16,8 +16,8 @@ let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
     d = Indexes([1,1,2,2,2], [1,3,1,4,5]),
     e = Indexes([1,1,1], sort([rand(),0.5,rand()])),
     f = Indexes([1,1,1], sort([rand(),0.5,rand()]))
-    @test union(c,d) == Indexes([1,1,1,1,2,2,2,2],[1,2,3,4,1,3,4,5])
-    @test length(union(e,f).columns[1]) == 5
+    @test merge(NDSparse(c,ones(5)),NDSparse(d,ones(5))).indexes == Indexes([1,1,1,1,2,2,2,2],[1,2,3,4,1,3,4,5])
+    @test length(merge(NDSparse(e,ones(3)),NDSparse(f,ones(3)))) == 5
     @test summary(c) == "Indexes{Tuple{Int64,Int64}}"
 end
 
@@ -25,8 +25,8 @@ let c = Indexes([1,1,1,2,2], [1,2,4,3,5]),
     d = Indexes([1,1,2,2,2], [1,3,1,4,5]),
     e = Indexes([1,1,1], sort([rand(),0.5,rand()])),
     f = Indexes([1,1,1], sort([rand(),0.5,rand()]))
-    @test intersect(c,d) == Indexes([1,2],[1,5])
-    @test length(intersect(e,f).columns[1]) == 1
+    @test map(+,NDSparse(c,ones(5)),NDSparse(d,ones(5))).indexes == Indexes([1,2],[1,5])
+    @test length(map(+,NDSparse(e,ones(3)),NDSparse(f,ones(3)))) == 1
     @test eltype(c) == Tuple{Int,Int}
 end
 

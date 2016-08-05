@@ -2,7 +2,7 @@ module NDSparseData
 
 import Base:
     show, summary, eltype, length, sortperm, issorted, permute!, sort, sort!,
-    getindex, setindex!, ndims, eachindex, size, union, intersect, map, convert,
+    getindex, setindex!, ndims, eachindex, size, map, convert,
     linearindexing, ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims, reducedim, push!
 
@@ -51,6 +51,19 @@ push!(I::Indexes, r::Tuple) = _pushrow!(I.columns[1], r[1], tail(I.columns), tai
         ex = quote
             let d = cmpelts(c.columns[$n], i, j)
                 (d == 0) ? ($ex) : (d < 0)
+            end
+        end
+    end
+    ex
+end
+
+@generated function rowcmp{D}(c::Indexes{D}, i, d::Indexes{D}, j)
+    N = length(D.parameters)
+    ex = :(cmp(c.columns[$N][i], d.columns[$N][j]))
+    for n in N-1:-1:1
+        ex = quote
+            let k = cmp(c.columns[$n][i], d.columns[$n][j])
+                (k == 0) ? ($ex) : k
             end
         end
     end
@@ -329,49 +342,14 @@ function flush!(t::NDSparse)
     nothing
 end
 
-function union{D}(I::Indexes{D}, J::Indexes{D})
+function count_overlap{D}(I::Indexes{D}, J::Indexes{D})
     lI, lJ = length(I), length(J)
-    guess = max(lI, lJ)
-    K = Indexes(map(c->_sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
     i = j = 1
-    while true
-        if i <= lI && j <= lJ
-            ri, rj = I[i], J[j]
-            c = cmp(ri, rj)
-            if c == 0
-                push!(K, ri)
-                i += 1
-                j += 1
-            elseif c < 0
-                push!(K, ri)
-                i += 1
-            else
-                push!(K, rj)
-                j += 1
-            end
-        elseif i <= lI
-            push!(K, I[i])
-            i += 1
-        elseif j <= lJ
-            push!(K, J[j])
-            j += 1
-        else
-            break
-        end
-    end
-    return K
-end
-
-function intersect{D}(I::Indexes{D}, J::Indexes{D})
-    lI, lJ = length(I), length(J)
-    guess = min(lI, lJ)
-    K = Indexes(map(c->_sizehint!(similar(c,0),guess), I.columns)...)::typeof(I)
-    i = j = 1
+    overlap = 0
     while i <= lI && j <= lJ
-        ri, rj = I[i], J[j]
-        c = cmp(ri, rj)
+        c = rowcmp(I, i, J, j)
         if c == 0
-            push!(K, ri)
+            overlap += 1
             i += 1
             j += 1
         elseif c < 0
@@ -380,29 +358,43 @@ function intersect{D}(I::Indexes{D}, J::Indexes{D})
             j += 1
         end
     end
-    return K
+    return overlap
 end
 
 # assign y into x out-of-place
 merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D}) = (flush!(x);flush!(y); _merge(x, y))
 # merge without flush!
 function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
-    K = union(x.indexes, y.indexes)
-    n = length(K)
-    lx, ly = length(x.indexes), length(y.indexes)
+    I, J = x.indexes, y.indexes
+    lI, lJ = length(I), length(J)
+    n = lI + lJ - count_overlap(I, J)
+    K = Indexes(map(c->similar(c,n), I.columns)...)::typeof(I)
     data = similar(x.data, n)
     i = j = 1
-    for k = 1:n
-        r = K[k]
-        if j <= ly && r == y.indexes[j]
-            data[k] = y.data[j]
-            j += 1
-            if i <= lx && r == x.indexes[i]
+    @inbounds for k = 1:n
+        if i <= lI && j <= lJ
+            c = rowcmp(I, i, J, j)
+            if c >= 0
+                K[k] = J[j]
+                data[k] = y.data[j]
+                if c==0; i += 1; end
+                j += 1
+            else
+                K[k] = I[i]
+                data[k] = x.data[i]
                 i += 1
             end
-        elseif i <= lx
+        elseif i <= lI
+            # TODO: copy remaining data columnwise
+            K[k] = I[i]
             data[k] = x.data[i]
             i += 1
+        elseif j <= lJ
+            K[k] = J[j]
+            data[k] = y.data[j]
+            j += 1
+        else
+            break
         end
     end
     NDSparse(K, data)
