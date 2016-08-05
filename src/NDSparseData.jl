@@ -78,7 +78,12 @@ function ==(x::Indexes, y::Indexes)
     return true
 end
 
-sortperm(c::Indexes) = sort!([1:length(c);], lt=(x,y)->rowless(c, x, y), alg=MergeSort)
+function sortperm(c::Indexes)
+    if length(c.columns) == 1
+        return sortperm(c.columns[1], alg=MergeSort)
+    end
+    sort!([1:length(c);], lt=(x,y)->rowless(c, x, y), alg=MergeSort)
+end
 issorted(c::Indexes) = issorted(1:length(c), lt=(x,y)->rowless(c, x, y))
 
 function permute!(c::Indexes, p::AbstractVector)
