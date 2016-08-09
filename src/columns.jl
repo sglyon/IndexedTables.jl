@@ -6,11 +6,35 @@ import Base:
 
 export Columns
 
-immutable Columns{D<:Tuple, C<:Tuple} <: AbstractVector{D}
+immutable Columns{D<:Tup, C<:Tup} <: AbstractVector{D}
     columns::C
+
+    function Columns(c)
+        length(c) > 0 || error("must have at least one column")
+        n = length(c[1])
+        for i = 2:length(c)
+            length(c[i]) == n || error("all columns must have same length")
+        end
+        new(c)
+    end
 end
-Columns(columns::AbstractVector...) =
-    Columns{eltypes(typeof(columns)),typeof(columns)}(columns)
+
+function Columns(cols::AbstractVector...; names::Union{Vector{Symbol},Tuple{Vararg{Symbol}},Void}=nothing)
+    if isa(names, Void)
+        Columns{eltypes(typeof(cols)),typeof(cols)}(cols)
+    else
+        dt = eval(:(@NT($(names...)))){map(eltype, cols)...}
+        ct = eval(:(@NT($(names...)))){map(typeof, cols)...}
+        Columns{dt,ct}(ct(cols...))
+    end
+end
+
+Columns(; pairs...) = Columns(map(x->x[2],pairs)..., names=Symbol[x[1] for x in pairs])
+
+(::Type{Columns{D}}){D}(columns::AbstractVector...) = Columns{D,typeof(columns)}(columns)
+
+Columns(c::Tuple) = Columns{eltypes(typeof(c)),typeof(c)}(c)
+Columns(c::NamedTuple) = Columns{Tuple{typeof(c).types...},typeof(c)}(c)
 
 eltype{D,C}(::Type{Columns{D,C}}) = D
 length(c::Columns) = length(c.columns[1])
@@ -20,24 +44,18 @@ linearindexing{T<:Columns}(::Type{T}) = Base.LinearFast()
 summary{D<:Tuple}(c::Columns{D}) = "Columns{$D}"
 
 empty!(c::Columns) = (map(empty!, c.columns); c)
-similar(c::Columns) = empty!(Columns(map(similar, c.columns)...))
-similar(c::Columns, n::Integer) = Columns(map(a->similar(a,n), c.columns)...)
-copy(c::Columns) = Columns(map(copy, c.columns)...)
+similar{D,C}(c::Columns{D,C}) = empty!(Columns{D,C}(map(similar, c.columns)))
+similar{D,C}(c::Columns{D,C}, n::Integer) = Columns{D,C}(map(a->similar(a,n), c.columns))
+copy{D,C}(c::Columns{D,C}) = Columns{D,C}(map(copy, c.columns))
 
-@inline ith_all(i, ::Tuple{}) = ()
-@inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+getindex{D<:Tuple}(c::Columns{D}, i::Integer) = ith_all(i, c.columns)
+getindex{D<:NamedTuple}(c::Columns{D}, i::Integer) = D(ith_all(i, c.columns)...)
 
-getindex(c::Columns, i) = ith_all(i, c.columns)
+getindex{D,C}(c::Columns{D,C}, p::AbstractVector) = Columns{D,C}(map(c->c[p], c.columns))
 
-getindex(c::Columns, p::AbstractVector) = Columns(map(c->c[p], c.columns)...)
+setindex!(I::Columns, r::Tup, i::Integer) = (foreach((c,v)->(c[i]=v), I.columns, r); I)
 
-setindex!(I::Columns, r::Tuple, i) = (_setindex!(I.columns[1], r[1], i, tail(I.columns), tail(r)); I)
-@inline _setindex!(c1, r1, i, cr, rr) = (c1[i]=r1; _setindex!(cr[1], rr[1], i, tail(cr), tail(rr)))
-@inline _setindex!(c1, r1, i, cr::Tuple{}, rr) = (c1[i] = r1)
-
-push!(I::Columns, r::Tuple) = _pushrow!(I.columns[1], r[1], tail(I.columns), tail(r))
-@inline _pushrow!(c1, r1, cr, rr) = (push!(c1, r1); _pushrow!(cr[1], rr[1], tail(cr), tail(rr)))
-@inline _pushrow!(c1, r1, cr::Tuple{}, rr) = push!(c1, r1)
+push!(I::Columns, r::Tup) = (foreach(push!, I.columns, r); I)
 
 function ==(x::Columns, y::Columns)
     length(x.columns) == length(y.columns) || return false
@@ -66,16 +84,23 @@ end
 sort!(c::Columns) = permute!(c, sortperm(c))
 sort(c::Columns) = c[sortperm(c)]
 
-# row operations
+# fused indexing operations
+# these can be implemented for custom vector types like PooledVector where
+# you can get big speedups by doing indexing and an operation in one step.
 
 @inline cmpelts(a, i, j) = (@inbounds x=cmp(a[i], a[j]); x)
+@inline copyelt!(a, i, j) = (@inbounds a[i] = a[j])
+
+# row operations
+
+copyrow!(I::Columns, i, src) = foreach(c->copyelt!(c, i, src), I.columns)
 
 @generated function rowless{D,C}(c::Columns{D,C}, i, j)
     N = length(C.parameters)
-    ex = :(cmpelts(c.columns[$N], i, j) < 0)
+    ex = :(cmpelts(getfield(c.columns,$N), i, j) < 0)
     for n in N-1:-1:1
         ex = quote
-            let d = cmpelts(c.columns[$n], i, j)
+            let d = cmpelts(getfield(c.columns,$n), i, j)
                 (d == 0) ? ($ex) : (d < 0)
             end
         end
@@ -85,10 +110,10 @@ end
 
 @generated function rowcmp{D}(c::Columns{D}, i, d::Columns{D}, j)
     N = length(D.parameters)
-    ex = :(cmp(c.columns[$N][i], d.columns[$N][j]))
+    ex = :(cmp(getfield(c.columns,$N)[i], getfield(d.columns,$N)[j]))
     for n in N-1:-1:1
         ex = quote
-            let k = cmp(c.columns[$n][i], d.columns[$n][j])
+            let k = cmp(getfield(c.columns,$n)[i], getfield(d.columns,$n)[j])
                 (k == 0) ? ($ex) : k
             end
         end
@@ -98,17 +123,11 @@ end
 
 @generated function roweq{D,C}(c::Columns{D,C}, i, j)
     N = length(C.parameters)
-    ex = :(cmpelts(c.columns[1], i, j) == 0)
+    ex = :(cmpelts(getfield(c.columns,1), i, j) == 0)
     for n in 2:N
         ex = quote
-            ($ex) && (cmpelts(c.columns[$n], i, j)==0)
+            ($ex) && (cmpelts(getfield(c.columns,$n), i, j)==0)
         end
     end
     ex
 end
-
-@inline copyelt!(a, i, j) = (@inbounds a[i] = a[j])
-
-copyrow!(I::Columns, i, src) = _copyrow!(I.columns[1], tail(I.columns), i, src)
-@inline _copyrow!(c1, cr, i, src) = (copyelt!(c1, i, src); _copyrow!(cr[1], tail(cr), i, src))
-@inline _copyrow!(c1, cr::Tuple{}, i, src) = copyelt!(c1, i, src)

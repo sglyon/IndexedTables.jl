@@ -17,7 +17,7 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
    guess = min(ll, rr)
 
    # Initialize output array components
-   I = Columns(map(c->_sizehint!(similar(c,0), guess), lI.columns)...)
+   I = Columns(map(c->_sizehint!(similar(c,0), guess), lI.columns))
    data = _sizehint!(similar(lD, typeof(op(lD[1],rD[1])), 0), guess)
 
    # Match and insert rows
@@ -39,7 +39,7 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
    end
 
    # Generate final datastructure
-   NDSparse(I, data)
+   NDSparse(I, data, presorted=true)
 end
 
 
@@ -55,20 +55,19 @@ function Base.select(arr::NDSparse, conditions::Pair...)
     for (c,f) in conditions
         filt_by_col!(f, cols[c], indxs)
     end
-    NDSparse(Columns(map(x->x[indxs], cols)...), arr.data[indxs])
+    NDSparse(Columns(map(x->x[indxs], cols)), arr.data[indxs], presorted=true)
 end
 
 # select a subset of columns
-function Base.select(arr::NDSparse, cols::Int...; agg=nothing)
+function Base.select(arr::NDSparse, which::DimName...; agg=nothing)
     flush!(arr)
-    return NDSparse([copy(arr.index.columns[c]) for c in cols]..., copy(arr.data), agg=agg)
+    NDSparse(Columns(arr.index.columns[[which...]]), copy(arr.data), agg=agg)
 end
 
 # Filter on data field
 function Base.filter(fn::Function, arr::NDSparse)
    flush!(arr)
-   cols = arr.index.columns
    data = arr.data
    indxs = filter(i->fn(data[i]), eachindex(data))
-   NDSparse(Columns(map(x->x[indxs], cols)...), data[indxs])
+   NDSparse(Columns(map(x->x[indxs], arr.index.columns)), data[indxs], presorted=true)
 end

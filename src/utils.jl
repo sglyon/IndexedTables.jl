@@ -6,6 +6,40 @@ eltypes(::Type{Tuple{}}) = Tuple{}
 eltypes{T<:Tuple}(::Type{T}) =
     tuple_type_cons(eltype(tuple_type_head(T)), eltypes(tuple_type_tail(T)))
 
+# tuple and NamedTuple utilities
+
+@inline ith_all(i, ::Tuple{}) = ()
+@inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
+
+@generated function ith_all(i, n::NamedTuple)
+    Expr(:tuple, [ Expr(:ref, Expr(:., :n, Expr(:quote, fieldname(n,f))), :i) for f = 1:nfields(n) ]...)
+end
+
+@generated function map(f, n::NamedTuple)
+    Expr(:call, Expr(:macrocall, Symbol("@NT"), fieldnames(n)...),
+         [ Expr(:call, :f, Expr(:., :n, Expr(:quote, fieldname(n,f)))) for f = 1:nfields(n) ]...)
+end
+
+@inline foreach(f, a::Tuple) = _foreach(f, a[1], tail(a))
+@inline _foreach(f, x, ra) = (f(x); _foreach(f, ra[1], tail(ra)))
+@inline _foreach(f, x, ra::Tuple{}) = f(x)
+
+@generated function foreach(f, n::NamedTuple)
+    Expr(:block, [ Expr(:call, :f, Expr(:., :n, Expr(:quote, fieldname(n,f)))) for f = 1:nfields(n) ]...)
+end
+
+@inline foreach(f, a::Tuple, b::Tuple) = _foreach(f, a[1], b[1], tail(a), tail(b))
+@inline _foreach(f, x, y, ra, rb) = (f(x, y); _foreach(f, ra[1], rb[1], tail(ra), tail(rb)))
+@inline _foreach(f, x, y, ra::Tuple{}, rb) = f(x, y)
+
+@generated function foreach(f, n::NamedTuple, m::NamedTuple)
+    Expr(:block, [ Expr(:call, :f,
+                        Expr(:., :n, Expr(:quote, fieldname(n,f))),
+                        Expr(:., :m, Expr(:quote, fieldname(m,f)))) for f = 1:nfields(n) ]...)
+end
+
+# interval type
+
 immutable Interval{T,closed1,closed2}
     lo::T
     hi::T
