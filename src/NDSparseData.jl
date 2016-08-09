@@ -73,21 +73,47 @@ showarray(io::IO, t::NDSparse) = show(io, t)
 
 function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     flush!(t)
-    print(io, "NDSparse{$T,$D}:")
-    if isa(t.index.columns, NamedTuple)
-        print(io, "\n ")
-        show(io, (keys(t.index.columns)...,))
+    print(io, "NDSparse $D => $T:")
+    n = length(t)
+    n == 0 && return
+    rows = n > 20 ? [1:min(n,10); (n-9):n] : [1:min(n,10);]
+    nc = length(t.index.columns)
+    reprs  = [ sprint(io->showcompact(io,t.index.columns[j][i])) for i in rows, j in 1:nc ]
+    if isa(t.data, Columns)
+        dreprs = [ sprint(io->showcompact(io,t.data[i][j])) for i in rows, j in 1:nfields(eltype(t.data)) ]
+    else
+        dreprs = [ sprint(io->showcompact(io,t.data[i])) for i in rows ]
     end
-    n = length(t.index)
-    for i in 1:min(n,10)
+    ndc = size(dreprs,2)
+    inames = isa(t.index.columns, NamedTuple) ? map(string,keys(t.index.columns)) : fill("", nc)
+    dnames = eltype(t.data) <: NamedTuple ? map(string,fieldnames(eltype(t.data))) : fill("", ndc)
+    widths  = [ max(strwidth(inames[c]), maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
+    dwidths = [ max(strwidth(dnames[c]), maximum(map(strwidth, dreprs[:,c]))) for c in 1:ndc ]
+    println(io)
+    if isa(t.index.columns, NamedTuple) || isa(t.data, Columns)
+        for c in 1:nc
+            print(io, rpad(inames[c], widths[c]+(c==nc ? 1 : 2), " "))
+        end
+        print(io, "│ ")
+        for c in 1:ndc
+            print(io, rpad(dnames[c], dwidths[c]+(c==ndc ? 1 : 2), " "))
+        end
         println(io)
-        print(io, " $(t.index[i]) => $(t.data[i])")
+        print(io, "─"^(sum(widths)+2*nc-1), "┼", "─"^(sum(dwidths)+2*ndc-1))
+    else
+        print(io, "─"^(sum(widths)+2*nc-1), "┬", "─"^(sum(dwidths)+2*ndc-1))
     end
-    if n > 20
-        println(); print(" ⋮")
-        for i in (n-9):n
-            println(io)
-            print(io, " $(t.index[i]) => $(t.data[i])")
+    for r in 1:size(reprs,1)
+        println(io)
+        for c in 1:nc
+            print(io, rpad(reprs[r,c], widths[c]+(c==nc ? 1 : 2), " "))
+        end
+        print(io, "│ ")
+        for c in 1:ndc
+            print(io, rpad(dreprs[r,c], dwidths[c]+(c==ndc ? 1 : 2), " "))
+        end
+        if n > 20 && r == 10
+            println(io); print(io, " ⋮")
         end
     end
 end
