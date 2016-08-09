@@ -33,13 +33,14 @@ in two cities:
     julia> hitemps = NDSparse([fill("New York",3); fill("Boston",3)],
                               repmat(Date(2016,7,6):Date(2016,7,8), 2),
                               [91,89,91,95,83,76])
-    NDSparse{Int64,Tuple{String,Date}}:
-     ("Boston",2016-07-06) => 95
-     ("Boston",2016-07-07) => 83
-     ("Boston",2016-07-08) => 76
-     ("New York",2016-07-06) => 91
-     ("New York",2016-07-07) => 89
-     ("New York",2016-07-08) => 91
+    NDSparse Tuple{String,Date} => Int64:
+    ───────────────────────┬───
+    "Boston"    2016-07-06 │ 95
+    "Boston"    2016-07-07 │ 83
+    "Boston"    2016-07-08 │ 76
+    "New York"  2016-07-06 │ 91
+    "New York"  2016-07-07 │ 89
+    "New York"  2016-07-08 │ 91
 
 Notice that the data was sorted first by city name, then date, giving a different
 order than we initially provided.
@@ -57,6 +58,9 @@ Of course, this assumes the file already has the "data column" in the rightmost
 position.
 If not, the columns can be reordered first.
 
+See [NDSparseIO](https://github.com/JuliaComputing/NDSparseIO.jl) for other
+data import utilities.
+
 ## Indexing
 
 Most lookup and filtering operations on `NDSparse` are done via indexing.
@@ -72,10 +76,11 @@ In other cases, a new `NDSparse` is returned, giving data for all matching
 locations:
 
     julia> hitemps["Boston", :]
-    NDSparse{Int64,Tuple{String,Date}}:
-     ("Boston",2016-07-06) => 95
-     ("Boston",2016-07-07) => 83
-     ("Boston",2016-07-08) => 76
+    NDSparse Tuple{String,Date} => Int64:
+    ─────────────────────┬───
+    "Boston"  2016-07-06 │ 95
+    "Boston"  2016-07-07 │ 83
+    "Boston"  2016-07-08 │ 76
 
 Like other arrays, `NDSparse` generates its data values when iterated.
 This allows the usual reduction functions (among others) in Base to work:
@@ -92,13 +97,14 @@ simply imagine passing the index columns to the constructor in a different order
 and repeating the sorting process:
 
     julia> permutedims(hitemps, [2, 1])
-    NDSparse{Int64,Tuple{Date,String}}:
-     (2016-07-06,"Boston") => 95
-     (2016-07-06,"New York") => 91
-     (2016-07-07,"Boston") => 83
-     (2016-07-07,"New York") => 89
-     (2016-07-08,"Boston") => 76
-     (2016-07-08,"New York") => 91
+    NDSparse Tuple{Date,String} => Int64:
+    ───────────────────────┬───
+    2016-07-06  "Boston"   │ 95
+    2016-07-06  "New York" │ 91
+    2016-07-07  "Boston"   │ 83
+    2016-07-07  "New York" │ 89
+    2016-07-08  "Boston"   │ 76
+    2016-07-08  "New York" │ 91
 
 Now the data is sorted first by date.
 In some cases such dimension permutations are needed for performance.
@@ -112,36 +118,40 @@ when producing a simplified summary of data.
 This can be done by passing dimension (column) numbers to `select`:
 
     julia> select(hitemps, 2)
-    NDSparse{Int64,Tuple{Date}}:
-     (2016-07-06,) => 95
-     (2016-07-06,) => 91
-     (2016-07-07,) => 83
-     (2016-07-07,) => 89
-     (2016-07-08,) => 76
-     (2016-07-08,) => 91
+    NDSparse Tuple{Date} => Int64:
+    ───────────┬───
+    2016-07-06 │ 95
+    2016-07-06 │ 91
+    2016-07-07 │ 83
+    2016-07-07 │ 89
+    2016-07-08 │ 76
+    2016-07-08 │ 91
 
 In this case, the result has multiple values for some indices, and so
 does not fully behave like a normal array anymore.
-However it is now suitable for aggregation: combining all values associated
-with the same indices.
-This can be done using `aggregate!`, which operates in place:
+Operations that might leave the array in such a state accept the keyword
+argument `agg`, a function to use to combine all values associated
+with the same indices:
 
-    julia> aggregate!(max, select(hitemps, 2))
-    NDSparse{Int64,Tuple{Date}}:
-     (2016-07-06,) => 95
-     (2016-07-07,) => 89
-     (2016-07-08,) => 91
+    julia> select(hitemps, 2, agg=max)
+    NDSparse Tuple{Date} => Int64:
+    ───────────┬───
+    2016-07-06 │ 95
+    2016-07-07 │ 89
+    2016-07-08 │ 91
 
-The first argument to `aggregate!` specifies a function to use to combine
-values.
+The `NDSparse` constructor also accepts the `agg` argument.
+The aggregation operation can also be done by itself, in-place, using the
+function `aggregate!`.
 
 `select` also supports filtering columns with arbitrary predicates, by
 passing `column=>predicate` pairs:
 
     julia> select(hitemps, 2=>isfriday)
-    NDSparse{Int64,Tuple{String,Date}}:
-     ("Boston",2016-07-08) => 76
-     ("New York",2016-07-08) => 91
+    NDSparse Tuple{String,Date} => Int64:
+    ───────────────────────┬───
+    "Boston"    2016-07-08 │ 76
+    "New York"  2016-07-08 │ 91
 
 ## Iterators
 
@@ -169,13 +179,14 @@ down by zip code:
                               repeat(Date(2016,7,6):Date(2016,7,8), inner=2),
                               repmat([02108,02134], 3),
                               [71,70,67,66,65,66])
-    NDSparse{Int64,Tuple{String,Date,Int64}}:
-     ("Boston",2016-07-06,2108) => 71
-     ("Boston",2016-07-06,2134) => 70
-     ("Boston",2016-07-07,2108) => 67
-     ("Boston",2016-07-07,2134) => 66
-     ("Boston",2016-07-08,2108) => 65
-     ("Boston",2016-07-08,2134) => 66
+    NDSparse Tuple{String,Date,Int64} => Int64:
+    ───────────────────────────┬───
+    "Boston"  2016-07-06  2108 │ 71
+    "Boston"  2016-07-06  2134 │ 70
+    "Boston"  2016-07-07  2108 │ 67
+    "Boston"  2016-07-07  2134 │ 66
+    "Boston"  2016-07-08  2108 │ 65
+    "Boston"  2016-07-08  2134 │ 66
 
 We want to compute the daily temperature range (high minus low).
 Since we don't have high temperatures available per zip code, we will assume
@@ -184,13 +195,14 @@ The `broadcast` function implements this interpretation of the data,
 automatically repeating data along missing dimensions:
 
     julia> broadcast((x,y)->y-x, lotemps, hitemps)
-    NDSparse{Int64,Tuple{String,Date,Int64}}:
-     ("Boston",2016-07-06,2108) => 24
-     ("Boston",2016-07-06,2134) => 25
-     ("Boston",2016-07-07,2108) => 16
-     ("Boston",2016-07-07,2134) => 17
-     ("Boston",2016-07-08,2108) => 11
-     ("Boston",2016-07-08,2134) => 10
+    NDSparse Tuple{String,Date,Int64} => Int64:
+    ───────────────────────────┬───
+    "Boston"  2016-07-06  2108 │ 24
+    "Boston"  2016-07-06  2134 │ 25
+    "Boston"  2016-07-07  2108 │ 16
+    "Boston"  2016-07-07  2134 │ 17
+    "Boston"  2016-07-08  2108 │ 11
+    "Boston"  2016-07-08  2134 │ 10
 
 `broadcast` currently only allows the first argument to have more dimensions,
 so we had to pass a function that subtracts its first argument from its second
@@ -218,10 +230,11 @@ to apply to indices in that dimension, and an aggregation function (the
 aggregation function is needed in case the mapping is many-to-one).
 The following call therefore gives monthly high temperatures:
 
-    julia> convertdim(hitemps, 2, month, max)
-    NDSparse{Int64,Tuple{String,Int64}}:
-     ("Boston",7) => 95
-     ("New York",7) => 91
+    julia> convertdim(hitemps, 2, month, agg=max)
+    NDSparse Tuple{String,Int64} => Int64:
+    ──────────────┬───
+    "Boston"    7 │ 95
+    "New York"  7 │ 91
 
 ## Assignment
 
@@ -242,3 +255,51 @@ This means that the worst case occurs when alternating between inserting a
 small number of items, and performing whole-array operations.
 To the extent possible, insertions should be batched, and in general done
 rarely.
+
+## Named columns
+
+`NDSparse` is built on a simpler data structure called `Columns` that groups
+a set of vectors together.
+This structure is used to store the index part of an `NDSparse`, and an
+`NDSparse` can be constructed by passing one of these objects directly.
+`Columns` allows names to be associated with its constituent vectors.
+Together, these features allow `NDSparse` arrays with named dimensions:
+
+    julia> hitemps = NDSparse(Columns(city = [fill("New York",3); fill("Boston",3)],
+                                      date = repmat(Date(2016,7,6):Date(2016,7,8), 2)),
+                              [91,89,91,95,83,76])
+    NDSparse Tuple{String,Date} => Int64:
+    city        date       │ 
+    ───────────────────────┼───
+    "Boston"    2016-07-06 │ 95
+    "Boston"    2016-07-07 │ 83
+    "Boston"    2016-07-08 │ 76
+    "New York"  2016-07-06 │ 91
+    "New York"  2016-07-07 │ 89
+    "New York"  2016-07-08 │ 91
+
+Now dimensions (e.g. in `select` operations) can be identified by symbol
+(e.g. `:city`) as well as integer index.
+
+A `Columns` object itself behaves like a vector, and so can be used
+to represent the data part of an `NDSparse`.
+This provides one possible way to store multiple columns of data:
+
+    julia> NDSparse(Columns(x = rand(4), y = rand(4)),
+                    Columns(observation = rand(1:2,4), confidence = rand(4)))
+    NDSparse Tuple{Float64,Float64} => NamedTuples._NT_observationconfidence{Int64,Float64}:
+    x          y        │ observation  confidence
+    ────────────────────┼────────────────────────
+    0.0400914  0.385859 │ 1            0.983784
+    0.165966   0.915532 │ 1            0.206534
+    0.532029   0.631039 │ 2            0.196016
+    0.932271   0.350075 │ 1            0.716692
+
+In this case the data elements are structs with fields `observation`
+and `confidence`, and can be used as follows:
+
+    julia> filter(d->d.confidence > 0.90, ans)
+    NDSparse Tuple{Array{Float64,1},Array{Float64,1}} => NamedTuples._NT_observationconfidence{Int64,Float64}:
+    x          y        │ observation  confidence
+    ────────────────────┼────────────────────────
+    0.0400914  0.385859 │ 1            0.983784
