@@ -96,7 +96,7 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
         end
         print(io, "│ ")
         for c in 1:ndc
-            print(io, rpad(dnames[c], dwidths[c]+(c==ndc ? 1 : 2), " "))
+            print(io, c==ndc ? dnames[c] : rpad(dnames[c], dwidths[c]+2, " "))
         end
         println(io)
         print(io, "─"^(sum(widths)+2*nc-1), "┼", "─"^(sum(dwidths)+2*ndc-1))
@@ -110,7 +110,7 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
         end
         print(io, "│ ")
         for c in 1:ndc
-            print(io, rpad(dreprs[r,c], dwidths[c]+(c==ndc ? 1 : 2), " "))
+            print(io, c==ndc ? dreprs[r,c] : rpad(dreprs[r,c], dwidths[c]+2, " "))
         end
         if n > 20 && r == 10
             println(io); print(io, " ⋮")
