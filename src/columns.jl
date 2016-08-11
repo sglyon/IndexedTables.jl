@@ -2,7 +2,7 @@
 
 import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
-    summary
+    summary, resize!
 
 export Columns
 
@@ -56,6 +56,8 @@ getindex{D,C}(c::Columns{D,C}, p::AbstractVector) = Columns{D,C}(map(c->c[p], c.
 setindex!(I::Columns, r::Tup, i::Integer) = (foreach((c,v)->(c[i]=v), I.columns, r); I)
 
 push!(I::Columns, r::Tup) = (foreach(push!, I.columns, r); I)
+
+resize!(I::Columns, n::Int) = (foreach(c->resize!(c,n), I.columns); I)
 
 function ==(x::Columns, y::Columns)
     length(x.columns) == length(y.columns) || return false

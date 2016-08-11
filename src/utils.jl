@@ -38,6 +38,9 @@ end
                         Expr(:., :m, Expr(:quote, fieldname(m,f)))) for f = 1:nfields(n) ]...)
 end
 
+fieldindex(x, i::Integer) = i
+fieldindex(x::NamedTuple, s::Symbol) = findfirst(x->x===s, fieldnames(x))
+
 # interval type
 
 immutable Interval{T,closed1,closed2}

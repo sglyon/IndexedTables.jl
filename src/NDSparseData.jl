@@ -113,7 +113,9 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
             print(io, c==ndc ? dreprs[r,c] : rpad(dreprs[r,c], dwidths[c]+2, " "))
         end
         if n > 20 && r == 10
-            println(io); print(io, " ⋮")
+            println(io)
+            print(io, " "^(sum(widths)+2*nc-1))
+            print(io, "⋮")
         end
     end
 end
@@ -465,7 +467,8 @@ end
 function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing)
     cols = x.index.columns
     d2 = map(xlat, cols[d])
-    NDSparse(map(copy,cols[1:d-1])..., d2, map(copy,cols[d+1:end])..., copy(x.data), agg=agg)
+    n = fieldindex(cols, d)
+    NDSparse(map(copy,cols[1:n-1])..., d2, map(copy,cols[n+1:end])..., copy(x.data), agg=agg)
 end
 
 convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing) = convertdim(x, d, i->xlat[i], agg=agg)
