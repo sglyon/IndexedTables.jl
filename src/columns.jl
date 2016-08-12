@@ -34,7 +34,7 @@ Columns(; pairs...) = Columns(map(x->x[2],pairs)..., names=Symbol[x[1] for x in 
 (::Type{Columns{D}}){D}(columns::AbstractVector...) = Columns{D,typeof(columns)}(columns)
 
 Columns(c::Tuple) = Columns{eltypes(typeof(c)),typeof(c)}(c)
-Columns(c::NamedTuple) = Columns{Tuple{typeof(c).types...},typeof(c)}(c)
+Columns(c::NamedTuple) = Columns{eltypes(Tuple{typeof(c).types...}),typeof(c)}(c)
 
 eltype{D,C}(::Type{Columns{D,C}}) = D
 length(c::Columns) = length(c.columns[1])
