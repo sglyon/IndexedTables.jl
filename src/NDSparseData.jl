@@ -418,20 +418,21 @@ broadcast(f::Function, A::NDSparse, B::NDSparse) = broadcast!(f, similar(A), A, 
 broadcast(f::Function, x::NDSparse, y) = NDSparse(x.index, broadcast(f, x.data, y), presorted=true)
 broadcast(f::Function, y, x::NDSparse) = NDSparse(x.index, broadcast(f, y, x.data), presorted=true)
 
-convert(::Type{NDSparse}, m::SparseMatrixCSC) = NDSparse(findnz(m)[[2,1,3]]..., presorted=true)
+# NDSparse uses lex order, Base arrays use colex order, so we need to
+# reorder the data. transpose and permutedims are used for this.
+convert(::Type{NDSparse}, m::SparseMatrixCSC) = NDSparse(findnz(m.')[[2,1,3]]..., presorted=true)
 
 function convert{T}(::Type{NDSparse}, a::AbstractArray{T})
     n = length(a)
-    data = Vector{T}(n)
     nd = ndims(a)
+    a = permutedims(a, [nd:-1:1;])
+    data = reshape(a, (n,))
     idxs = [ Vector{Int}(n) for i = 1:nd ]
     i = 1
     for I in CartesianRange(size(a))
-        val = a[I]
         for j = 1:nd
             idxs[j][i] = I[j]
         end
-        data[i] = val
         i += 1
     end
     NDSparse(Columns(reverse(idxs)...), data, presorted=true)

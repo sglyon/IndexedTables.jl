@@ -123,8 +123,19 @@ end
 
 let a = rand(5,5,5)
     for dims in ([2,3], [1], [2])
-        @test reducedim(+, convert(NDSparse,a), 4-dims) == convert(NDSparse,
-                                                                   squeeze(reducedim(+, a, dims), (dims...,)))
+        r = squeeze(reducedim(+, a, dims), (dims...,))
+        b = reducedim(+, convert(NDSparse,a), dims)
+        c = convert(NDSparse, r)
+        @test b.index == c.index
+        @test_approx_eq b.data c.data
     end
     @test_throws ArgumentError reducedim(+, convert(NDSparse,a), [1,2,3])
+end
+
+for a in (rand(2,2), rand(3,5))
+    nd = convert(NDSparse, a)
+    @test nd == convert(NDSparse, sparse(a))
+    for (I,d) in zip(nd.index, nd.data)
+        @test a[I...] == d
+    end
 end
