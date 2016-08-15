@@ -139,3 +139,18 @@ for a in (rand(2,2), rand(3,5))
         @test a[I...] == d
     end
 end
+
+_colnames(x::NDSparse) = keys(x.index.columns)
+
+@test _colnames(NDSparse(ones(2),ones(2),ones(2),names=[:a,:b])) == [:a, :b]
+@test _colnames(NDSparse(Columns(x=ones(2),y=ones(2)), ones(2))) == [:x, :y]
+
+let x = NDSparse(Columns(x = [1,2,3], y = [4,5,6], z = [7,8,9]), [10,11,12])
+    names = [:x, :y, :z]
+    @test _colnames(x) == names
+    @test _colnames(filter(a->a==11, x)) == names
+    @test _colnames(select(x, :z, :x)) == [:z, :x]
+    @test _colnames(select(x, :y)) == [:y]
+    @test _colnames(select(x, :x=>a->a>1, :z=>a->a>7)) == names
+    @test _colnames(x[1:2, 4:5, 8:9]) == names
+end

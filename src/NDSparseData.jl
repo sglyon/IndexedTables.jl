@@ -456,10 +456,8 @@ function aggregate!(f, x::NDSparse)
             current = newlen
         end
     end
+    resize!(idxs, newlen)
     resize!(data, newlen)
-    for c in idxs.columns
-        resize!(c, newlen)
-    end
     x
 end
 
