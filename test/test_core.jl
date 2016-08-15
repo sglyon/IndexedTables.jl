@@ -154,3 +154,60 @@ let x = NDSparse(Columns(x = [1,2,3], y = [4,5,6], z = [7,8,9]), [10,11,12])
     @test _colnames(select(x, :x=>a->a>1, :z=>a->a>7)) == names
     @test _colnames(x[1:2, 4:5, 8:9]) == names
 end
+
+# test showing
+@test repr(NDSparse([1,2,3],[3,2,1],Float64[4,5,6])) == """
+NDSparse Tuple{Int64,Int64} => Float64:
+─────┬────
+1  3 │ 4.0
+2  2 │ 5.0
+3  1 │ 6.0"""
+
+@test repr(NDSparse(Columns(a=[1,2,3],test=[3,2,1]),Float64[4,5,6])) == """
+NDSparse Tuple{Int64,Int64} => Float64:
+a  test │ 
+────────┼────
+1  3    │ 4.0
+2  2    │ 5.0
+3  1    │ 6.0"""
+
+@test repr(NDSparse(Columns(a=[1,2,3],test=[3,2,1]),Columns(x=Float64[4,5,6],y=[9,8,7]))) == """
+NDSparse Tuple{Int64,Int64} => NamedTuples._NT_xy{Float64,Int64}:
+a  test │ x    y
+────────┼───────
+1  3    │ 4.0  9
+2  2    │ 5.0  8
+3  1    │ 6.0  7"""
+
+@test repr(NDSparse([1,2,3],[3,2,1],Columns(x=Float64[4,5,6],y=[9,8,7]))) == """
+NDSparse Tuple{Int64,Int64} => NamedTuples._NT_xy{Float64,Int64}:
+     │ x    y
+─────┼───────
+1  3 │ 4.0  9
+2  2 │ 5.0  8
+3  1 │ 6.0  7"""
+
+@test repr(NDSparse([1:21;],ones(Int,21))) == """
+NDSparse Tuple{Int64} => Int64:
+───┬──
+1  │ 1
+2  │ 1
+3  │ 1
+4  │ 1
+5  │ 1
+6  │ 1
+7  │ 1
+8  │ 1
+9  │ 1
+10 │ 1
+   ⋮
+12 │ 1
+13 │ 1
+14 │ 1
+15 │ 1
+16 │ 1
+17 │ 1
+18 │ 1
+19 │ 1
+20 │ 1
+21 │ 1"""
