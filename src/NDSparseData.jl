@@ -69,7 +69,6 @@ end
 if isless(Base.VERSION, v"0.5.0-")
 writemime(io::IO, m::MIME"text/plain", t::NDSparse) = show(io, t)
 end
-showarray(io::IO, t::NDSparse) = show(io, t)
 
 function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     flush!(t)
@@ -161,7 +160,6 @@ _in(x, y) = in(x, y)
 _in(x, ::Colon) = true
 _in(x, v::AbstractVector) = (idx=searchsortedfirst(v, x); idx<=length(v) && v[idx]==x)
 _in(x, v::AbstractString) = x == v
-_in(x, v::Dimension) = x == v
 
 import Base: tail
 # test whether row r is within product(idxs...)

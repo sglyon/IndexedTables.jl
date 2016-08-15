@@ -20,17 +20,6 @@ let lo=1, hi=10
     end
 end
 
-import NDSparseData: @dimension, Dimension
-
-@dimension Year
-@test Year(1) == Year(1)
-@test Year(1) != Year(2)
-@test isless(Year(1), Year(2))
-@test !isless(Year(2), Year(1))
-@test repr(Year(2016)) == "Year(2016)"
-@test convert(Int, Year(2000)) === 2000
-@test convert(Year, 1999) === Year(1999)
-
 let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
     p = collect(NDSparseData.product(a, b))
     @test p == [(11,56), (11,13), (11,10), (53,56), (53,13), (53,10), (150,56), (150,13), (150,10)]

@@ -55,36 +55,6 @@ in{T}(x, i::Interval{T,true,false})  = i.lo <= x <  i.hi
 in{T}(x, i::Interval{T,false,true})  = i.lo <  x <= i.hi
 in{T}(x, i::Interval{T,true,true})   = i.lo <= x <= i.hi
 
-abstract Dimension{T<:Real}
-
-==(a::Dimension, b::Dimension) = a.value == b.value
-isless(a::Dimension, b::Dimension) = isless(a.value, b.value)
-# these convert definitions are ambiguous unless Dimension's
-# parameter is restricted (I picked Real)
-convert{T<:Real}(::Type{T}, d::Dimension{T}) = d.value
-convert{T<:Dimension}(::Type{T}, x::Real) = T(x)
-
-function show(io::IO, d::Dimension)
-    print(io, typeof(d).name, "(")
-    show(io, d.value)
-    print(io, ")")
-end
-
-macro dimension(d)
-    T = esc(:T); d = esc(d)
-    quote
-        immutable ($d){$T <: Real} <: Dimension{$T}
-            value::($T)
-        end
-    end
-end
-
-# dimension where all values x are lo <= x <= hi
-#abstract BoundedDimension{T, lo, hi} <: Dimension{T}
-
-# maybe: dimension where all values belong to some Range
-#abstract RangeDimension{T, r} <: Dimension{T}
-
 # lexicographic order product iterator
 
 import Base: length, eltype, start, next, done

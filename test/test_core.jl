@@ -7,7 +7,10 @@ let a = Columns([1,2,1],["foo","bar","baz"]),
     @test a != b
     @test a != c
     @test b != c
-    @test sort!(a) == sort!(b) == sort!(c)
+    sort!(a)
+    @test sort(b) == a
+    sort!(b); sort!(c)
+    @test a == b == c
     @test size(a) == size(b) == size(c) == (3,)
     @test eltype(a) == Tuple{Int,String}
 end
@@ -92,12 +95,18 @@ end
 let r=1:5, s=1:2:5
     A = NDSparse([r;], [r;], [r;])
     @test A[s, :] == NDSparse([s;], [s;], [s;])
+    @test_throws ErrorException A[s, :, :]
 end
 
 let a = NDSparse([1,2,2,2], [1,2,3,4], [10,9,8,7])
+    @test a[1,1] == 10
+    @test a[2,3] == 8
+    #@test_throws ErrorException a[2]
     @test a[2,:] == NDSparse([2,2,2], [2,3,4], [9,8,7])
     @test a[:,1] == NDSparse([1], [1], [10])
     @test collect(where(a, 2, :)) == [9,8,7]
+    @test collect(pairs(a)) == [(1,1)=>10, (2,2)=>9, (2,3)=>8, (2,4)=>7]
+    @test first(pairs(a, :, 3)) == ((2,3)=>8)
 end
 
 let a = NDSparse([1,2,2,2], [1,2,3,4], zeros(4))
@@ -153,6 +162,7 @@ let x = NDSparse(Columns(x = [1,2,3], y = [4,5,6], z = [7,8,9]), [10,11,12])
     @test _colnames(select(x, :y)) == [:y]
     @test _colnames(select(x, :x=>a->a>1, :z=>a->a>7)) == names
     @test _colnames(x[1:2, 4:5, 8:9]) == names
+    @test convertdim(x, :y, a->0) == NDSparse(Columns([1,2,3], [0,0,0], [7,8,9]), [10,11,12])
 end
 
 # test showing
