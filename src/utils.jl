@@ -6,6 +6,10 @@ eltypes(::Type{Tuple{}}) = Tuple{}
 eltypes{T<:Tuple}(::Type{T}) =
     tuple_type_cons(eltype(tuple_type_head(T)), eltypes(tuple_type_tail(T)))
 
+# sizehint, making sure to return first argument
+_sizehint!{T}(a::Array{T,1}, n::Integer) = (sizehint!(a, n); a)
+_sizehint!(a::AbstractArray, sz::Integer) = a
+
 # tuple and NamedTuple utilities
 
 @inline ith_all(i, ::Tuple{}) = ()

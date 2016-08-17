@@ -1,48 +1,3 @@
-export naturaljoin
-
-## Joins
-
-# Natural Join (Both NDSParse arrays must have the same number of columns, in the same order)
-
-function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
-   flush!(left); flush!(right)
-   lI = left.index
-   rI = right.index
-   lD = left.data
-   rD = right.data
-
-   ll, rr = length(lI), length(rI)
-
-   # Guess the length of the result
-   guess = min(ll, rr)
-
-   # Initialize output array components
-   I = Columns(map(c->_sizehint!(similar(c,0), guess), lI.columns))
-   data = _sizehint!(similar(lD, typeof(op(lD[1],rD[1])), 0), guess)
-
-   # Match and insert rows
-   i = j = 1
-
-   while i <= ll && j <= rr
-      lt, rt = lI[i], rI[j]
-      c = cmp(lt, rt)
-      if c == 0
-         push!(I, lt)
-         push!(data, op(lD[i], rD[j]))
-         i += 1
-         j += 1
-      elseif c < 0
-         i += 1
-      else
-         j += 1
-      end
-   end
-
-   # Generate final datastructure
-   NDSparse(I, data, presorted=true)
-end
-
-
 # Column-wise filtering (Accepts conditions as column-function pairs)
 # Example: select(arr, 1 => x->x>10, 3 => x->x!=10 ...)
 
@@ -66,8 +21,56 @@ end
 
 # Filter on data field
 function Base.filter(fn::Function, arr::NDSparse)
-   flush!(arr)
-   data = arr.data
-   indxs = filter(i->fn(data[i]), eachindex(data))
-   NDSparse(Columns(map(x->x[indxs], arr.index.columns)), data[indxs], presorted=true)
+    flush!(arr)
+    data = arr.data
+    indxs = filter(i->fn(data[i]), eachindex(data))
+    NDSparse(Columns(map(x->x[indxs], arr.index.columns)), data[indxs], presorted=true)
+end
+
+# aggregation
+
+# combine adjacent rows with equal index using the given function
+function aggregate!(f, x::NDSparse)
+    idxs, data = x.index, x.data
+    n = length(idxs)
+    newlen = 1
+    current = newlen
+    for i = 2:n
+        if roweq(idxs, i, current)
+            data[newlen] = f(data[newlen], data[i])
+        else
+            newlen += 1
+            if newlen != i
+                data[newlen] = data[i]
+                copyrow!(idxs, newlen, i)
+            end
+            current = newlen
+        end
+    end
+    resize!(idxs, newlen)
+    resize!(data, newlen)
+    x
+end
+
+# convert dimension `d` of `x` using the given translation function.
+# if the relation is many-to-one, aggregate with function `agg`
+function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing)
+    cols = x.index.columns
+    d2 = map(xlat, cols[d])
+    n = fieldindex(cols, d)
+    NDSparse(map(copy,cols[1:n-1])..., d2, map(copy,cols[n+1:end])..., copy(x.data), agg=agg)
+end
+
+convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing) = convertdim(x, d, i->xlat[i], agg=agg)
+
+convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
+
+sum(x::NDSparse) = sum(x.data)
+
+function reducedim(f, x::NDSparse, dims)
+    keep = setdiff([1:ndims(x);], dims)
+    if isempty(keep)
+        throw(ArgumentError("to remove all dimensions, use `reduce(f, A)`"))
+    end
+    select(x, keep..., agg=f)
 end
