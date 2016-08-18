@@ -10,6 +10,10 @@ eltypes{T<:Tuple}(::Type{T}) =
 _sizehint!{T}(a::Array{T,1}, n::Integer) = (sizehint!(a, n); a)
 _sizehint!(a::AbstractArray, sz::Integer) = a
 
+# argument selectors
+left(x, y) = x
+right(x, y) = y
+
 # tuple and NamedTuple utilities
 
 @inline ith_all(i, ::Tuple{}) = ()

@@ -108,6 +108,15 @@ copyrow!(I::Columns, i, src) = foreach(c->copyelt!(c, i, src), I.columns)
     ex
 end
 
+@generated function roweq{D,C}(c::Columns{D,C}, i, j)
+    N = length(C.parameters)
+    ex = :(cmpelts(getfield(c.columns,1), i, j) == 0)
+    for n in 2:N
+        ex = :(($ex) && (cmpelts(getfield(c.columns,$n), i, j)==0))
+    end
+    ex
+end
+
 @generated function rowcmp{D}(c::Columns{D}, i, d::Columns{D}, j)
     N = length(D.parameters)
     ex = :(cmp(getfield(c.columns,$N)[i], getfield(d.columns,$N)[j]))
@@ -121,12 +130,22 @@ end
     ex
 end
 
-@generated function roweq{D,C}(c::Columns{D,C}, i, j)
+# test that the row on the right is "as of" the row on the left, i.e.
+# all columns are equal except left >= right in last column.
+# Could be generalized to some number of trailing columns, but I don't
+# know whether that has applications.
+@generated function row_asof{D,C}(c::Columns{D,C}, i, d::Columns{D,C}, j)
     N = length(C.parameters)
-    ex = :(cmpelts(getfield(c.columns,1), i, j) == 0)
+    if N == 1
+        ex = :(!isless(getfield(c.columns,1)[i], getfield(d.columns,1)[j]))
+    else
+        ex = :(isequal(getfield(c.columns,1)[i], getfield(d.columns,1)[j]))
+    end
     for n in 2:N
-        ex = quote
-            ($ex) && (cmpelts(getfield(c.columns,$n), i, j)==0)
+        if N == n
+            ex = :(($ex) && !isless(getfield(c.columns,$n)[i], getfield(d.columns,$n)[j]))
+        else
+            ex = :(($ex) && isequal(getfield(c.columns,$n)[i], getfield(d.columns,$n)[j]))
         end
     end
     ex

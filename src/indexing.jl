@@ -113,7 +113,7 @@ function flush!(t::NDSparse)
         ibuf = t.index_buffer[p]
         dbuf = t.data_buffer[p]
         temp = NDSparse(ibuf, dbuf)
-        aggregate!((x,y)->y, temp)  # keep later values only
+        aggregate!(right, temp)  # keep later values only
 
         # 2. merge to a new copy
         new = _merge(t, temp)

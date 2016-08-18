@@ -1,4 +1,4 @@
-export naturaljoin
+export naturaljoin, leftjoin, asofjoin
 
 ## Joins
 
@@ -6,11 +6,8 @@ export naturaljoin
 
 function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
     flush!(left); flush!(right)
-    lI = left.index
-    rI = right.index
-    lD = left.data
-    rD = right.data
-
+    lI, rI = left.index, right.index
+    lD, rD = left.data, right.data
     ll, rr = length(lI), length(rI)
 
     # Guess the length of the result
@@ -43,6 +40,70 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
 end
 
 map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D}) = naturaljoin(x, y, f)
+
+# left join
+
+function leftjoin(left::NDSparse, right::NDSparse, op::Function = NDSparseData.right)
+    flush!(left); flush!(right)
+    lI, rI = left.index, right.index
+    lD, rD = left.data, right.data
+    ll, rr = length(lI), length(rI)
+
+    data = similar(lD)
+
+    i = j = 1
+
+    while i <= ll && j <= rr
+        c = rowcmp(lI, i, rI, j)
+        if c < 0
+            @inbounds data[i] = lD[i]
+            i += 1
+        elseif c == 0
+            @inbounds data[i] = op(lD[i], rD[j])
+            i += 1
+            j += 1
+        else
+            j += 1
+        end
+    end
+    data[i:ll] = lD[i:ll]
+
+    NDSparse(copy(lI), data, presorted=true)
+end
+
+# asof join
+
+function asofjoin(left::NDSparse, right::NDSparse)
+    flush!(left); flush!(right)
+    lI, rI = left.index, right.index
+    lD, rD = left.data, right.data
+    ll, rr = length(lI), length(rI)
+
+    data = similar(lD)
+
+    i = j = 1
+
+    while i <= ll && j <= rr
+        c = rowcmp(lI, i, rI, j)
+        if c < 0
+            @inbounds data[i] = lD[i]
+            i += 1
+        elseif row_asof(lI, i, rI, j)  # all equal except last col left>=right
+            j += 1
+            while j <= rr && row_asof(lI, i, rI, j)
+                j += 1
+            end
+            j -= 1
+            @inbounds data[i] = rD[j]
+            i += 1
+        else
+            j += 1
+        end
+    end
+    data[i:ll] = lD[i:ll]
+
+    NDSparse(copy(lI), data, presorted=true)
+end
 
 # merge - union join
 
