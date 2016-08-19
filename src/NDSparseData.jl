@@ -7,7 +7,7 @@ import Base:
     ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims, reducedim
 
-export NDSparse, flush!, aggregate!, where, pairs, convertdim
+export NDSparse, flush!, aggregate!, where, pairs, convertdim, columns
 
 const Tup = Union{Tuple,NamedTuple}
 const DimName = Union{Int,Symbol}
@@ -154,6 +154,8 @@ map{T,D<:Tuple,C<:Tup,V<:Columns}(p::Proj, x::NDSparse{T,D,C,V}) =
     NDSparse(x.index, p(x.data), presorted=true)
 
 (p::Proj)(x::NDSparse) = map(p, x)
+
+columns(x::NDSparse, which...) = NDSparse(x.index, Columns(x.data.columns[[which...]]), presorted=true)
 
 # NDSparse uses lex order, Base arrays use colex order, so we need to
 # reorder the data. transpose and permutedims are used for this.
