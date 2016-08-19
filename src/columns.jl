@@ -84,6 +84,9 @@ end
 sort!(c::Columns) = permute!(c, sortperm(c))
 sort(c::Columns) = c[sortperm(c)]
 
+map(p::Proj, c::Columns) = p(c.columns)
+(p::Proj)(c::Columns) = p(c.columns)
+
 # fused indexing operations
 # these can be implemented for custom vector types like PooledVector where
 # you can get big speedups by doing indexing and an operation in one step.

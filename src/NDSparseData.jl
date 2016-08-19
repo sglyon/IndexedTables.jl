@@ -149,6 +149,12 @@ end
 
 map(f, x::NDSparse) = NDSparse(copy(x.index), map(f, x.data), presorted=true)
 
+# lift projection on arrays of structs
+map{T,D<:Tuple,C<:Tup,V<:Columns}(p::Proj, x::NDSparse{T,D,C,V}) =
+    NDSparse(x.index, p(x.data), presorted=true)
+
+(p::Proj)(x::NDSparse) = map(p, x)
+
 # NDSparse uses lex order, Base arrays use colex order, so we need to
 # reorder the data. transpose and permutedims are used for this.
 convert(::Type{NDSparse}, m::SparseMatrixCSC) = NDSparse(findnz(m.')[[2,1,3]]..., presorted=true)

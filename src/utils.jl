@@ -49,6 +49,14 @@ end
 fieldindex(x, i::Integer) = i
 fieldindex(x::NamedTuple, s::Symbol) = findfirst(x->x===s, fieldnames(x))
 
+# family of projection functions
+
+immutable Proj{field}; end
+
+(::Proj{field}){field}(x) = getfield(x, field)
+
+pick(fld) = Proj{fld}()
+
 # interval type
 
 immutable Interval{T,closed1,closed2}
