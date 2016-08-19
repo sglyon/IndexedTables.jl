@@ -34,9 +34,8 @@ function aggregate!(f, x::NDSparse)
     idxs, data = x.index, x.data
     n = length(idxs)
     newlen = 1
-    current = newlen
     for i = 2:n
-        if roweq(idxs, i, current)
+        if roweq(idxs, i, newlen)
             data[newlen] = f(data[newlen], data[i])
         else
             newlen += 1
@@ -44,12 +43,40 @@ function aggregate!(f, x::NDSparse)
                 data[newlen] = data[i]
                 copyrow!(idxs, newlen, i)
             end
-            current = newlen
         end
     end
     resize!(idxs, newlen)
     resize!(data, newlen)
     x
+end
+
+# the same, except returns a new vector where each element is computed
+# by applying `f` to a vector of all values associated with equal indexes.
+function vec_aggregate!(f, x::NDSparse)
+    idxs, data = x.index, x.data
+    n = length(idxs)
+    local newdata
+    newlen = 0
+    i1 = 1
+    while i1 <= n
+        i = i1+1
+        while i <= n && roweq(idxs, i, i1)
+            i += 1
+        end
+        val = f(data[i1:(i-1)])
+        if newlen == 0
+            newdata = [val]
+        else
+            push!(newdata, val)
+        end
+        newlen += 1
+        if newlen != i1
+            copyrow!(idxs, newlen, i1)
+        end
+        i1 = i
+    end
+    resize!(idxs, newlen)
+    newlen==0 ? Union{}[] : newdata
 end
 
 # convert dimension `d` of `x` using the given translation function.
@@ -67,10 +94,27 @@ convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
 
 sum(x::NDSparse) = sum(x.data)
 
+reducedim(f, x::NDSparse, dims::Symbol) = reducedim(f, x, [dims])
 function reducedim(f, x::NDSparse, dims)
-    keep = setdiff([1:ndims(x);], dims)
+    keep = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
     if isempty(keep)
         throw(ArgumentError("to remove all dimensions, use `reduce(f, A)`"))
     end
     select(x, keep..., agg=f)
+end
+
+reducedim_vec(f, x::NDSparse, dims::Symbol) = reducedim_vec(f, x, [dims])
+function reducedim_vec(f, x::NDSparse, dims)
+    keep = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
+    if isempty(keep)
+        throw(ArgumentError("to remove all dimensions, use `reduce(f, A)`"))
+    end
+    cols = Columns(x.index.columns[[keep...]])
+    if issorted(cols)
+        y = NDSparse(copy(cols), x.data, presorted=true)
+    else
+        y = NDSparse(cols, x.data)
+    end
+    d = vec_aggregate!(f, y)
+    NDSparse(y.index, d, presorted=true)
 end
