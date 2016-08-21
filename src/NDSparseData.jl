@@ -23,7 +23,18 @@ immutable NDSparse{T, D<:Tuple, C<:Tup, V<:AbstractVector}
     data_buffer::V
 end
 
-function NDSparse{T,D,C}(I::Columns{D,C}, d::AbstractVector{T}; agg=nothing, presorted=false)
+"""
+`NDSparse(indices::Columns, data::AbstractVector; kwargs...)`
+
+Construct an NDSparse array with the given indices and data. Each vector in `indices` represents the index values for one dimension. On construction, the indices and data are sorted in lexicographic order of the indices.
+
+Keyword arguments:
+
+* `agg::Function`: If `indices` contains duplicate entries, the corresponding data items are reduced using this 2-argument function.
+* `presorted::Bool`: If true, the indices are assumed to already be sorted and no sorting is done.
+* `copy::Bool`: If true, the storage for the new array will not be shared with the passed indices and data. If false (the default), the passed arrays will be copied only if necessary for sorting. The only way to guarantee sharing of data is to pass `presorted=true`.
+"""
+function NDSparse{T,D,C}(I::Columns{D,C}, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false)
     length(I) == length(d) || error("index and data must have the same number of elements")
     # ensure index is a `Columns` that generates tuples
     dt = D
@@ -35,12 +46,20 @@ function NDSparse{T,D,C}(I::Columns{D,C}, d::AbstractVector{T}; agg=nothing, pre
         p = sortperm(I)
         I = I[p]
         d = d[p]
+    elseif copy
+        I = Base.copy(I)
+        d = Base.copy(d)
     end
     nd = NDSparse{T,dt,C,typeof(d)}(I, d, similar(I,0), similar(d,0))
     agg===nothing || aggregate!(agg, nd)
     return nd
 end
 
+"""
+`NDSparse(columns...; names=Symbol[...], kwargs...)`
+
+Construct an NDSparse array from columns. The last argument is the data column, and the rest are index columns. The `names` keyword argument optionally specifies names for the index columns (dimensions).
+"""
 function NDSparse(columns...; names=nothing, rest...)
     keys, data = columns[1:end-1], columns[end]
     NDSparse(Columns(keys..., names=names), data; rest...)
@@ -87,7 +106,7 @@ function permutedims(t::NDSparse, p::AbstractVector)
         throw(ArgumentError("argument to permutedims must be a valid permutation"))
     end
     flush!(t)
-    NDSparse(Columns(t.index.columns[p]), t.data)
+    NDSparse(Columns(t.index.columns[p]), t.data, copy=true)
 end
 
 # showing
@@ -155,6 +174,12 @@ map{T,D<:Tuple,C<:Tup,V<:Columns}(p::Proj, x::NDSparse{T,D,C,V}) =
 
 (p::Proj)(x::NDSparse) = map(p, x)
 
+"""
+`columns(x::NDSparse, names...)`
+
+Given an NDSparse array with multiple data columns (its data vector is a `Columns` object), return a
+new array with the specified subset of data columns. Data is shared with the original array.
+"""
 columns(x::NDSparse, which...) = NDSparse(x.index, Columns(x.data.columns[[which...]]), presorted=true)
 
 # NDSparse uses lex order, Base arrays use colex order, so we need to

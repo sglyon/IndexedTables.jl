@@ -47,6 +47,12 @@ end
 
 # iterators over indices - lazy getindex
 
+"""
+`where(arr::NDSparse, indices...)`
+
+Returns an iterator over data items where the given indices match. Accepts the
+same index arguments as `getindex`.
+"""
 function where(d::NDSparse, idxs...)
     I = d.index
     data = d.data
@@ -56,6 +62,12 @@ end
 
 pairs(d::NDSparse) = (d.index[i]=>d.data[i] for i in 1:length(d))
 
+"""
+`pairs(arr::NDSparse, indices...)`
+
+Similar to `where`, but returns an iterator giving `index=>value` pairs.
+`index` will be a tuple.
+"""
 function pairs(d::NDSparse, idxs...)
     I = d.index
     data = d.data
@@ -105,7 +117,11 @@ function _setindex!{T,D}(t::NDSparse{T,D}, rhs, idxs)
     end
 end
 
-# sort and merge data from accumulation buffer
+"""
+`flush!(arr::NDSparse)`
+
+Commit queued assignment operations, by sorting and merging the internal temporary buffer.
+"""
 function flush!(t::NDSparse)
     if !isempty(t.data_buffer)
         # 1. sort the buffer

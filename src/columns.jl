@@ -41,7 +41,7 @@ size(c::Columns) = (length(c),)
 linearindexing{T<:Columns}(::Type{T}) = Base.LinearFast()
 summary{D<:Tuple}(c::Columns{D}) = "Columns{$D}"
 
-empty!(c::Columns) = (map(empty!, c.columns); c)
+empty!(c::Columns) = (foreach(empty!, c.columns); c)
 similar{D,C}(c::Columns{D,C}) = empty!(Columns{D,C}(map(similar, c.columns)))
 similar{D,C}(c::Columns{D,C}, n::Integer) = Columns{D,C}(map(a->similar(a,n), c.columns))
 copy{D,C}(c::Columns{D,C}) = Columns{D,C}(map(copy, c.columns))
