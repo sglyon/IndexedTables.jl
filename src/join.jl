@@ -21,10 +21,9 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
     i = j = 1
 
     while i <= ll && j <= rr
-        lt, rt = lI[i], rI[j]
-        c = cmp(lt, rt)
+        c = rowcmp(lI, i, rI, j)
         if c == 0
-            push!(I, lt)
+            push!(I, lI[i])
             push!(data, op(lD[i], rD[j]))
             i += 1
             j += 1
@@ -169,9 +168,7 @@ end
 
 tslice(t::Tuple, I) = ntuple(i->t[I[i]], length(I))
 
-function match_indices(A::NDSparse, B::NDSparse)
-    Ap = typeof(A).parameters[2].parameters
-    Bp = typeof(B).parameters[2].parameters
+function find_corresponding(Ap, Bp)
     matches = zeros(Int, length(Ap))
     J = IntSet(1:length(Bp))
     for i = 1:length(Ap)
@@ -187,12 +184,58 @@ function match_indices(A::NDSparse, B::NDSparse)
     tuple(matches...)
 end
 
+function match_indices(A::NDSparse, B::NDSparse)
+    if isa(A.index.columns, NamedTuple) && isa(B.index.columns, NamedTuple)
+        Ap = fieldnames(A.index.columns)
+        Bp = fieldnames(B.index.columns)
+    else
+        Ap = typeof(A).parameters[2].parameters
+        Bp = typeof(B).parameters[2].parameters
+    end
+    find_corresponding(Ap, Bp)
+end
+
+# broadcast over trailing dimensions, i.e. C's dimensions are a prefix
+# of B's. this is an easy case since it's just an inner join plus
+# sometimes repeating values from the right argument.
+function _broadcast_trailing!(f, A::NDSparse, B::NDSparse, C::NDSparse)
+    I = A.index
+    data = A.data
+    lI, rI = B.index, C.index
+    lD, rD = B.data, C.data
+    ll, rr = length(lI), length(rI)
+
+    i = j = 1
+
+    while i <= ll && j <= rr
+        c = rowcmp(lI, i, rI, j)
+        if c == 0
+            while true
+                push!(I, lI[i])
+                push!(data, f(lD[i], rD[j]))
+                i += 1
+                (i <= ll && rowcmp(lI, i, rI, j)==0) || break
+            end
+            j += 1
+        elseif c < 0
+            i += 1
+        else
+            j += 1
+        end
+    end
+
+    return A
+end
+
 function broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse)
     flush!(A); flush!(B); flush!(C)
     B_inds = match_indices(A, B)
     C_inds = match_indices(A, C)
     all(i->B_inds[i] > 0 || C_inds[i] > 0, 1:ndims(A)) ||
         error("some destination indices are uncovered")
+    if B_inds == ntuple(identity, ndims(A)) && C_inds[1:ndims(C)] == ntuple(identity, ndims(C))
+        return _broadcast_trailing!(f, A, B, C)
+    end
     common = filter(i->B_inds[i] > 0 && C_inds[i] > 0, 1:ndims(A))
     B_common = tslice(B_inds, common)
     C_common = tslice(C_inds, common)
@@ -232,9 +275,13 @@ function broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse)
     order!(A)
 end
 
-# TODO: allow B to subsume columns of A as well?
-
-broadcast(f::Function, A::NDSparse, B::NDSparse) = broadcast!(f, similar(A), A, B)
+function broadcast(f::Function, A::NDSparse, B::NDSparse)
+    if ndims(B) > ndims(A)
+        broadcast!((x,y)->f(y,x), similar(B), B, A)
+    else
+        broadcast!(f, similar(A), A, B)
+    end
+end
 
 broadcast(f::Function, x::NDSparse, y) = NDSparse(x.index, broadcast(f, x.data, y), presorted=true)
 broadcast(f::Function, y, x::NDSparse) = NDSparse(x.index, broadcast(f, y, x.data), presorted=true)

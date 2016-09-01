@@ -120,7 +120,9 @@ end
     ex
 end
 
-@generated function rowcmp{D}(c::Columns{D}, i, d::Columns{D}, j)
+# uses number of columns from `d`, assuming `c` has more or equal
+# dimensions, for broadcast joins.
+@generated function rowcmp{D}(c::Columns, i, d::Columns{D}, j)
     N = length(D.parameters)
     ex = :(cmp(getfield(c.columns,$N)[i], getfield(d.columns,$N)[j]))
     for n in N-1:-1:1

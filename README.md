@@ -194,7 +194,7 @@ the high temperatures are city-wide averages applicable to every zip code.
 The `broadcast` function implements this interpretation of the data,
 automatically repeating data along missing dimensions:
 
-    julia> broadcast((x,y)->y-x, lotemps, hitemps)
+    julia> broadcast(-, hitemps, lotemps)
     NDSparse Tuple{String,Date,Int64} => Int64:
     ───────────────────────────┬───
     "Boston"  2016-07-06  2108 │ 24
@@ -204,9 +204,6 @@ automatically repeating data along missing dimensions:
     "Boston"  2016-07-08  2108 │ 11
     "Boston"  2016-07-08  2134 │ 10
 
-`broadcast` currently only allows the first argument to have more dimensions,
-so we had to pass a function that subtracts its first argument from its second
-instead of just `-`.
 Notice that `broadcast` also automatically performs an inner join, selecting
 only rows that match.
 

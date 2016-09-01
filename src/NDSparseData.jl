@@ -95,9 +95,11 @@ done(a::NDSparse, st) = done(a.data, st)
 
 # ensure array is in correct storage order -- meant for internal use
 function order!(t::NDSparse)
-    p = sortperm(t.index)
-    permute!(t.index, p)
-    copy!(t.data, t.data[p])
+    if !issorted(t.index)
+        p = sortperm(t.index)
+        permute!(t.index, p)
+        copy!(t.data, t.data[p])
+    end
     return t
 end
 
