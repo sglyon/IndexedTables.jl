@@ -2,7 +2,7 @@
 
 import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
-    summary, resize!
+    summary, resize!, vcat
 
 export Columns
 
@@ -86,6 +86,16 @@ sort(c::Columns) = c[sortperm(c)]
 
 map(p::Proj, c::Columns) = p(c.columns)
 (p::Proj)(c::Columns) = p(c.columns)
+
+vcat{D<:Tup,C<:Tuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}((map(vcat, map(x->x.columns, (c,cs...))...)...,))
+vcat{D<:Tup,C<:NamedTuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}(C(map(vcat, map(x->x.columns, (c,cs...))...)...,))
+
+function vcat{D<:Tup}(c::Columns{D}, cs::Columns{D}...)
+    cols = (map(vcat, map(x->x.columns, (c,cs...))...)...,)
+    Columns{D,typeof(cols)}(cols)
+end
+
+vcat(c::Columns, cs::Columns...) = Columns(map(vcat, map(x->x.columns, (c,cs...))...)...)
 
 # fused indexing operations
 # these can be implemented for custom vector types like PooledVector where

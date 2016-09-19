@@ -126,11 +126,16 @@ function count_overlap{D}(I::Columns{D}, J::Columns{D})
 end
 
 # assign y into x out-of-place
-merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D}) = (flush!(x);flush!(y); _merge(x, y))
+merge{T,S,D<:Tuple}(x::NDSparse{T,D}, y::NDSparse{S,D}) = (flush!(x);flush!(y); _merge(x, y))
 # merge without flush!
 function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
     I, J = x.index, y.index
     lI, lJ = length(I), length(J)
+    #if isless(I[end], J[1])
+    #    return NDSparse(vcat(x.index, y.index), vcat(x.data, y.data), presorted=true)
+    #elseif isless(J[end], I[1])
+    #    return NDSparse(vcat(y.index, x.index), vcat(y.data, x.data), presorted=true)
+    #end
     n = lI + lJ - count_overlap(I, J)
     K = Columns(map(c->similar(c,n), I.columns))::typeof(I)
     data = similar(x.data, n)
@@ -162,6 +167,19 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
         end
     end
     NDSparse(K, data, presorted=true)
+end
+
+function merge(x::NDSparse, xs::NDSparse...)
+    as = [x, xs...]
+    for a in as; flush!(a); end
+    sort!(as, by=y->first(y.index))
+    if all(i->isless(as[i-1].index[end], as[i].index[1]), 2:length(as))
+        # non-overlapping
+        return NDSparse(vcat(map(a->a.index, as)...),
+                        vcat(map(a->a.data,  as)...),
+                        presorted=true)
+    end
+    error("this case of `merge` is not yet implemented")
 end
 
 # broadcast join - repeat data along a dimension missing from one array
