@@ -95,6 +95,11 @@ function vec_aggregate!(f, idxs::Columns, data)
     newlen==0 ? Union{}[] : newdata
 end
 
+function vec_aggregate!(f, x::NDSparse)
+    data = vec_aggregate!(f, x.index, x.data)
+    NDSparse(x.index, data, presorted=true)
+end
+
 """
 `convertdim(x::NDSparse, d::DimName, xlate; agg::Function)`
 
