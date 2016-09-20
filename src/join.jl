@@ -191,6 +191,7 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
 end
 
 function merge(x::NDSparse, xs::NDSparse...)
+    length(xs) == 0 && return x
     as = [x, xs...]
     for a in as; flush!(a); end
     sort!(as, by=y->first(y.index))
