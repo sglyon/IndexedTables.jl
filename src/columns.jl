@@ -2,7 +2,7 @@
 
 import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
-    summary, resize!, vcat
+    summary, resize!, vcat, serialize, deserialize
 
 export Columns
 
@@ -98,6 +98,33 @@ function vcat{D<:Tup}(c::Columns{D}, cs::Columns{D}...)
 end
 
 vcat(c::Columns, cs::Columns...) = Columns(map(vcat, map(x->x.columns, (c,cs...))...)...)
+
+function serialize(s::AbstractSerializer, c::Columns)
+    Base.Serializer.serialize_type(s, Columns)
+    serialize(s, eltype(c) <: NamedTuple)
+    serialize(s, isa(c.columns, NamedTuple))
+    serialize(s, fieldnames(c.columns))
+    for col in c.columns
+        serialize(s, col)
+    end
+end
+
+function deserialize(s::AbstractSerializer, ::Type{Columns})
+    Dnamed = deserialize(s)
+    Cnamed = deserialize(s)
+    fn = deserialize(s)
+    cols = Any[ deserialize(s) for i = 1:length(fn) ]
+    if Cnamed
+        c = Columns(cols..., names = fn)
+        if !Dnamed
+            dt = eltypes(typeof((c.columns...,)))
+            c = Columns{dt,typeof(c.columns)}(c.columns)
+        end
+    else
+        c = Columns(cols...)
+    end
+    return c
+end
 
 # fused indexing operations
 # these can be implemented for custom vector types like PooledVector where

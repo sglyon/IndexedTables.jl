@@ -5,7 +5,7 @@ using NamedTuples
 import Base:
     show, eltype, length, getindex, setindex!, ndims, map, convert,
     ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
-    permutedims, reducedim
+    permutedims, reducedim, serialize, deserialize
 
 export NDSparse, flush!, aggregate!, where, pairs, convertdim, columns
 
@@ -164,6 +164,19 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
             print(io, "⋮")
         end
     end
+end
+
+function serialize(s::AbstractSerializer, x::NDSparse)
+    flush!(x)
+    Base.Serializer.serialize_type(s, NDSparse)
+    serialize(s, x.index)
+    serialize(s, x.data)
+end
+
+function deserialize(s::AbstractSerializer, ::Type{NDSparse})
+    I = deserialize(s)
+    d = deserialize(s)
+    NDSparse(I, d, presorted=true)
 end
 
 # map and convert
