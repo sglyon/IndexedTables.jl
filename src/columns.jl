@@ -57,6 +57,8 @@ push!(I::Columns, r::Tup) = (foreach(push!, I.columns, r); I)
 
 resize!(I::Columns, n::Int) = (foreach(c->resize!(c,n), I.columns); I)
 
+_sizehint!(c::Columns, n::Integer) = (foreach(c->_sizehint!(c,n), c.columns); c)
+
 function ==(x::Columns, y::Columns)
     length(x.columns) == length(y.columns) || return false
     n = length(x)

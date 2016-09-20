@@ -1,10 +1,31 @@
-export naturaljoin, leftjoin, asofjoin
+export naturaljoin, innerjoin, leftjoin, asofjoin
 
 ## Joins
 
 # Natural Join (Both NDSParse arrays must have the same number of columns, in the same order)
 
-function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
+function naturaljoin(left::NDSparse, right::NDSparse, op)
+    lD, rD = left.data, right.data
+    _naturaljoin(left, right, op, similar(lD, typeof(op(lD[1],rD[1])), 0))
+end
+
+const innerjoin = naturaljoin
+
+combine_op(a, b) = tuple
+combine_op(a::Columns, b::Columns) = (l, r)->(l..., r...)
+combine_op(a, b::Columns) = (l, r)->(l, r...)
+combine_op(a::Columns, b) = (l, r)->(l..., r)
+similarz(a) = similar(a,0)
+
+function naturaljoin(left::NDSparse, right::NDSparse)
+    lD, rD = left.data, right.data
+    op = combine_op(lD, rD)
+    cols(v) = (v,)
+    cols(v::Columns) = v.columns
+    _naturaljoin(left, right, op, Columns((map(similarz,cols(lD))...,map(similarz,cols(rD))...)))
+end
+
+function _naturaljoin(left::NDSparse, right::NDSparse, op, data)
     flush!(left); flush!(right)
     lI, rI = left.index, right.index
     lD, rD = left.data, right.data
@@ -15,7 +36,7 @@ function naturaljoin(left::NDSparse, right::NDSparse, op::Function)
 
     # Initialize output array components
     I = Columns(map(c->_sizehint!(similar(c,0), guess), lI.columns))
-    data = _sizehint!(similar(lD, typeof(op(lD[1],rD[1])), 0), guess)
+    _sizehint!(data, guess)
 
     # Match and insert rows
     i = j = 1
@@ -42,7 +63,7 @@ map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D}) = naturaljoin(x, y, f)
 
 # left join
 
-function leftjoin(left::NDSparse, right::NDSparse, op::Function = NDSparseData.right)
+function leftjoin(left::NDSparse, right::NDSparse, op = NDSparseData.right)
     flush!(left); flush!(right)
     lI, rI = left.index, right.index
     lD, rD = left.data, right.data
