@@ -40,10 +40,10 @@ end
 @inline _foreach(f, x, y, ra, rb) = (f(x, y); _foreach(f, ra[1], rb[1], tail(ra), tail(rb)))
 @inline _foreach(f, x, y, ra::Tuple{}, rb) = f(x, y)
 
-@generated function foreach(f, n::NamedTuple, m::NamedTuple)
+@generated function foreach(f, n::Union{Tuple,NamedTuple}, m::Union{Tuple,NamedTuple})
     Expr(:block, [ Expr(:call, :f,
-                        Expr(:., :n, Expr(:quote, fieldname(n,f))),
-                        Expr(:., :m, Expr(:quote, fieldname(m,f)))) for f = 1:nfields(n) ]...)
+                        Expr(:call, :getfield, :n, f),
+                        Expr(:call, :getfield, :m, f)) for f = 1:nfields(n) ]...)
 end
 
 fieldindex(x, i::Integer) = i

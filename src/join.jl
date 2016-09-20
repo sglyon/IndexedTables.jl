@@ -35,7 +35,7 @@ function _naturaljoin(left::NDSparse, right::NDSparse, op, data)
     guess = min(ll, rr)
 
     # Initialize output array components
-    I = Columns(map(c->_sizehint!(similar(c,0), guess), lI.columns))
+    I = _sizehint!(similar(lI,0), guess)
     _sizehint!(data, guess)
 
     # Match and insert rows
@@ -158,7 +158,7 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
     #    return NDSparse(vcat(y.index, x.index), vcat(y.data, x.data), presorted=true)
     #end
     n = lI + lJ - count_overlap(I, J)
-    K = Columns(map(c->similar(c,n), I.columns))::typeof(I)
+    K = similar(I, n)::typeof(I)
     data = similar(x.data, n)
     i = j = 1
     @inbounds for k = 1:n
