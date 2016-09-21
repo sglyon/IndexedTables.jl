@@ -60,6 +60,24 @@ function where(d::NDSparse, idxs...)
     (data[i] for i in Filter(r->row_in(I[r], idxs), rng))
 end
 
+"""
+`update!(f::Function, arr::NDSparse, indices...)`
+
+Replace data values `x` with `f(x)` at each location that matches the given
+indices.
+"""
+function update!(f, d::NDSparse, idxs...)
+    I = d.index
+    data = d.data
+    rng = range_estimate(I.columns[1], idxs[1])
+    for r in rng
+        if row_in(I[r], idxs)
+            data[r] = f(data[r])
+        end
+    end
+    d
+end
+
 pairs(d::NDSparse) = (d.index[i]=>d.data[i] for i in 1:length(d))
 
 """

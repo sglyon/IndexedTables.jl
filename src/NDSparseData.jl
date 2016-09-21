@@ -7,7 +7,8 @@ import Base:
     ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims, reducedim, serialize, deserialize
 
-export NDSparse, flush!, aggregate!, vec_aggregate!, where, pairs, convertdim, columns, column
+export NDSparse, flush!, aggregate!, vec_aggregate!, where, pairs, convertdim, columns, column,
+    update!
 
 const Tup = Union{Tuple,NamedTuple}
 const DimName = Union{Int,Symbol}
