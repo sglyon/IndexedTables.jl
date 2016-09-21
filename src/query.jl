@@ -95,9 +95,51 @@ function vec_aggregate!(f, idxs::Columns, data)
     newlen==0 ? Union{}[] : newdata
 end
 
+# the same, but not modifying idxs
+function vec_aggregate(f, idxs::Columns, data)
+    n = length(idxs)
+    local newdata
+    newlen = 0
+    i1 = 1
+    while i1 <= n
+        i = i1+1
+        while i <= n && roweq(idxs, i, i1)
+            i += 1
+        end
+        val = f(data[i1:(i-1)])
+        if newlen == 0
+            newdata = [val]
+        else
+            push!(newdata, val)
+        end
+        newlen += 1
+        i1 = i
+    end
+    newlen==0 ? Union{}[] : newdata
+end
+
+"""
+`vec_aggregate!(f::Function, x::NDSparse)`
+
+Combine adjacent rows with equal indices using a function from vector to scalar,
+e.g. `mean`.
+"""
 function vec_aggregate!(f, x::NDSparse)
     data = vec_aggregate!(f, x.index, x.data)
     NDSparse(x.index, data, presorted=true)
+end
+
+"""
+`vec_aggregate!(f::Vector{Function}, x::NDSparse)`
+
+Combine adjacent rows with equal indices using multiple functions from vector to scalar.
+The result has multiple data columns, one for each function, named based on the functions.
+"""
+function vec_aggregate!(fs::Vector, x::NDSparse)
+    n = length(fs)
+    datacols = [ (i==n ? vec_aggregate! : vec_aggregate)(fs[i], x.index, x.data) for i = 1:n ]
+    NDSparse(x.index, Columns(datacols..., names = map(Symbol, fs)),
+             presorted=true)
 end
 
 """
