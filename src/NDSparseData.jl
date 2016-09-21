@@ -7,7 +7,7 @@ import Base:
     ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
     permutedims, reducedim, serialize, deserialize
 
-export NDSparse, flush!, aggregate!, vec_aggregate!, where, pairs, convertdim, columns
+export NDSparse, flush!, aggregate!, vec_aggregate!, where, pairs, convertdim, columns, column
 
 const Tup = Union{Tuple,NamedTuple}
 const DimName = Union{Int,Symbol}
@@ -196,6 +196,10 @@ Given an NDSparse array with multiple data columns (its data vector is a `Column
 new array with the specified subset of data columns. Data is shared with the original array.
 """
 columns(x::NDSparse, which...) = NDSparse(x.index, Columns(x.data.columns[[which...]]), presorted=true)
+
+columns(x::NDSparse, which) = NDSparse(x.index, x.data.columns[which], presorted=true)
+
+column(x::NDSparse, which) = columns(x, which)
 
 # NDSparse uses lex order, Base arrays use colex order, so we need to
 # reorder the data. transpose and permutedims are used for this.
