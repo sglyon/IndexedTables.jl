@@ -143,19 +143,26 @@ function vec_aggregate!(fs::Vector, x::NDSparse)
 end
 
 """
-`convertdim(x::NDSparse, d::DimName, xlate; agg::Function)`
+`convertdim(x::NDSparse, d::DimName, xlate; agg::Function, name)`
 
 Apply function or dictionary `xlate` to each index in the specified dimension.
 If the mapping is many-to-one, `agg` is used to aggregate the results.
+`name` optionally specifies a name for the new dimension.
 """
-function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing)
+function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, name=nothing)
     cols = x.index.columns
     d2 = map(xlat, cols[d])
     n = fieldindex(cols, d)
-    NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true)
+    if isa(x.index.columns, NamedTuple) && name !== nothing
+        names = fieldnames(x.index.columns)
+        names[n] = name
+        NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true, names=names)
+    else
+        NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true)
+    end
 end
 
-convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing) = convertdim(x, d, i->xlat[i], agg=agg)
+convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing, name=nothing) = convertdim(x, d, i->xlat[i], agg=agg, name=name)
 
 convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
 
