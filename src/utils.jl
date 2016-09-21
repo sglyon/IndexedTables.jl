@@ -57,20 +57,6 @@ immutable Proj{field}; end
 
 pick(fld) = Proj{fld}()
 
-# interval type
-
-immutable Interval{T,closed1,closed2}
-    lo::T
-    hi::T
-end
-
-Interval{T}(lo::T,hi::T) = Interval{T,true,true}(lo,hi)
-
-in{T}(x, i::Interval{T,false,false}) = i.lo <  x <  i.hi
-in{T}(x, i::Interval{T,true,false})  = i.lo <= x <  i.hi
-in{T}(x, i::Interval{T,false,true})  = i.lo <  x <= i.hi
-in{T}(x, i::Interval{T,true,true})   = i.lo <= x <= i.hi
-
 # lexicographic order product iterator
 
 import Base: length, eltype, start, next, done

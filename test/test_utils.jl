@@ -1,25 +1,6 @@
 using Base.Test
 using NDSparseData
 
-let lo=1, hi=10
-    I = NDSparseData.Interval(lo, hi)
-    @test lo in I
-    @test hi in I
-    @test !(hi+1 in I)
-    @test !(lo-1 in I)
-    @test  (lo+1 in I)
-    for left in [true, false]
-        for right in [true, false]
-            I = NDSparseData.Interval{Int,left,right}(lo, hi)
-            @test (lo in I) == left
-            @test (hi in I) == right
-            @test (hi+1 in I) == false
-            @test (lo-1 in I) == false
-            @test (lo+1 in I) == true
-        end
-    end
-end
-
 let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
     p = collect(NDSparseData.product(a, b))
     @test p == [(11,56), (11,13), (11,10), (53,56), (53,13), (53,10), (150,56), (150,13), (150,10)]
