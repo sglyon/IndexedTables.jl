@@ -167,14 +167,12 @@ end
 
 # test showing
 @test repr(NDSparse([1,2,3],[3,2,1],Float64[4,5,6])) == """
-NDSparse Tuple{Int64,Int64} => Float64:
 ─────┬────
 1  3 │ 4.0
 2  2 │ 5.0
 3  1 │ 6.0"""
 
 @test repr(NDSparse(Columns(a=[1,2,3],test=[3,2,1]),Float64[4,5,6])) == """
-NDSparse Tuple{Int64,Int64} => Float64:
 a  test │ 
 ────────┼────
 1  3    │ 4.0
@@ -182,7 +180,6 @@ a  test │
 3  1    │ 6.0"""
 
 @test repr(NDSparse(Columns(a=[1,2,3],test=[3,2,1]),Columns(x=Float64[4,5,6],y=[9,8,7]))) == """
-NDSparse Tuple{Int64,Int64} => NamedTuples._NT_xy{Float64,Int64}:
 a  test │ x    y
 ────────┼───────
 1  3    │ 4.0  9
@@ -190,7 +187,6 @@ a  test │ x    y
 3  1    │ 6.0  7"""
 
 @test repr(NDSparse([1,2,3],[3,2,1],Columns(x=Float64[4,5,6],y=[9,8,7]))) == """
-NDSparse Tuple{Int64,Int64} => NamedTuples._NT_xy{Float64,Int64}:
      │ x    y
 ─────┼───────
 1  3 │ 4.0  9
@@ -198,7 +194,6 @@ NDSparse Tuple{Int64,Int64} => NamedTuples._NT_xy{Float64,Int64}:
 3  1 │ 6.0  7"""
 
 @test repr(NDSparse([1:21;],ones(Int,21))) == """
-NDSparse Tuple{Int64} => Int64:
 ───┬──
 1  │ 1
 2  │ 1

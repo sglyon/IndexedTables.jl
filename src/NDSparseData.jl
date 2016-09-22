@@ -120,9 +120,8 @@ end
 
 function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     flush!(t)
-    print(io, "NDSparse $D => $T:")
     n = length(t)
-    n == 0 && return
+    n == 0 && (return print(io, "empty table $D => $T"))
     rows = n > 20 ? [1:min(n,10); (n-9):n] : [1:n;]
     nc = length(t.index.columns)
     reprs  = [ sprint(io->showcompact(io,t.index.columns[j][i])) for i in rows, j in 1:nc ]
@@ -136,7 +135,6 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     dnames = eltype(t.data) <: NamedTuple ? map(string,fieldnames(eltype(t.data))) : fill("", ndc)
     widths  = [ max(strwidth(inames[c]), maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
     dwidths = [ max(strwidth(dnames[c]), maximum(map(strwidth, dreprs[:,c]))) for c in 1:ndc ]
-    println(io)
     if isa(t.index.columns, NamedTuple) || (isa(t.data, Columns) && isa(t.data.columns, NamedTuple))
         for c in 1:nc
             print(io, rpad(inames[c], widths[c]+(c==nc ? 1 : 2), " "))
