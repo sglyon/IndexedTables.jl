@@ -166,6 +166,8 @@ convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing, name=nothing) = convert
 
 convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
 
+const aggregate = convertdim
+
 sum(x::NDSparse) = sum(x.data)
 
 function reducedim(f, x::NDSparse, dims)
