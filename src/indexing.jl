@@ -18,11 +18,6 @@ _in(x, v::AbstractString) = x == v
 
 import Base: tail
 # test whether row r is within product(idxs...)
-#row_in(r::Tuple{}, idxs) = true
-#row_in(r, idxs) = _row_in(r[1], idxs[1], tail(r), tail(idxs))
-#@inline _row_in(r1, i1, rr, ri) = _in(r1,i1) & _row_in(rr[1], ri[1], tail(rr), tail(ri))
-#@inline _row_in(r1, i1, rr::Tuple{}, ri) = _in(r1,i1)
-
 @inline row_in(cs, r::Integer, idxs) = _row_in(cs[1], r, idxs[1], tail(cs), tail(idxs))
 @inline _row_in(c1, r, i1, rI, ri) = _in(c1[r],i1) & _row_in(rI[1], r, ri[1], tail(rI), tail(ri))
 @inline _row_in(c1, r, i1, rI::Tuple{}, ri) = _in(c1[r],i1)
@@ -31,14 +26,24 @@ range_estimate(col, idx) = 1:length(col)
 range_estimate{T}(col::AbstractVector{T}, idx::T) = searchsortedfirst(col, idx):searchsortedlast(col,idx)
 range_estimate(col, idx::AbstractArray) = searchsortedfirst(col,first(idx)):searchsortedlast(col,last(idx))
 
+const _fwd = Base.Order.ForwardOrdering()
+
+range_estimate(col, idx, lo, hi) = 1:length(col)
+range_estimate{T}(col::AbstractVector{T}, idx::T, lo, hi) =
+    searchsortedfirst(col, idx, lo, hi, _fwd):searchsortedlast(col, idx, lo, hi, _fwd)
+range_estimate(col, idx::AbstractArray, lo, hi) =
+    searchsortedfirst(col, first(idx), lo, hi, _fwd):searchsortedlast(col, last(idx), lo, hi, _fwd)
+
 isconstrange(col, idx) = false
 isconstrange{T}(col::AbstractVector{T}, idx::T) = true
 isconstrange(col, idx::AbstractArray) = isequal(first(idx), last(idx))
 
 function range_estimate(I::Columns, idxs)
     r = range_estimate(I.columns[1], idxs[1])
-    if isconstrange(I.columns[1], idxs[1])
-        r = intersect(r, range_estimate(I.columns[2], idxs[2]))
+    i = 1; n = length(idxs)
+    while i < n && isconstrange(I.columns[i], idxs[i])
+        i += 1
+        r = intersect(r, range_estimate(I.columns[i], idxs[i], first(r), last(r)))
     end
     return r
 end
