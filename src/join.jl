@@ -191,8 +191,10 @@ function _merge{T,S,D}(x::NDSparse{T,D}, y::NDSparse{S,D})
 end
 
 function merge(x::NDSparse, xs::NDSparse...)
-    length(xs) == 0 && return x
     as = [x, xs...]
+    filter!(a->length(a)>0, as)
+    length(as) == 0 && return x
+    length(as) == 1 && return a[1]
     for a in as; flush!(a); end
     sort!(as, by=y->first(y.index))
     if all(i->isless(as[i-1].index[end], as[i].index[1]), 2:length(as))
