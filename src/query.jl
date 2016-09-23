@@ -67,6 +67,22 @@ function aggregate!(f, x::NDSparse)
     x
 end
 
+function aggregate!(f, dest_idxs, dest_data, src_idxs, src_data)
+    n = length(src_idxs)
+    i1 = 1
+    while i1 <= n
+        val = src_data[i1]
+        i = i1+1
+        while i <= n && roweq(src_idxs, i, i1)
+            val = f(val, src_data[i])
+            i += 1
+        end
+        push!(dest_idxs, src_idxs[i1])
+        push!(dest_data, val)
+        i1 = i
+    end
+end
+
 # the same, except returns a new vector where each element is computed
 # by applying `f` to a vector of all values associated with equal indexes.
 function vec_aggregate!(f, idxs::Columns, data)
@@ -93,6 +109,30 @@ function vec_aggregate!(f, idxs::Columns, data)
     end
     resize!(idxs, newlen)
     newlen==0 ? Union{}[] : newdata
+end
+
+function vec_aggregate_to(f, src_idxs, src_data)
+    n = length(src_idxs)
+    dest_idxs = similar(src_idxs,0)
+    local newdata
+    newlen = 0
+    i1 = 1
+    while i1 <= n
+        i = i1+1
+        while i <= n && roweq(src_idxs, i, i1)
+            i += 1
+        end
+        val = f(src_data[i1:(i-1)])
+        if newlen == 0
+            newdata = [val]
+        else
+            push!(newdata, val)
+        end
+        newlen += 1
+        push!(dest_idxs, src_idxs[i1])
+        i1 = i
+    end
+    (dest_idxs, (newlen==0 ? Union{}[] : newdata))
 end
 
 # the same, but not modifying idxs
@@ -124,9 +164,9 @@ end
 Combine adjacent rows with equal indices using a function from vector to scalar,
 e.g. `mean`.
 """
-function vec_aggregate!(f, x::NDSparse)
-    data = vec_aggregate!(f, x.index, x.data)
-    NDSparse(x.index, data, presorted=true)
+function vec_aggregate(f, x::NDSparse)
+    idxs, data = vec_aggregate_to(f, x.index, x.data)
+    NDSparse(idxs, data, presorted=true, copy=false)
 end
 
 """
@@ -149,20 +189,24 @@ Apply function or dictionary `xlate` to each index in the specified dimension.
 If the mapping is many-to-one, `agg` is used to aggregate the results.
 `name` optionally specifies a name for the new dimension.
 """
-function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, name=nothing)
+function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, vecagg=nothing, name=nothing)
     cols = x.index.columns
     d2 = map(xlat, cols[d])
     n = fieldindex(cols, d)
+    names = nothing
     if isa(x.index.columns, NamedTuple) && name !== nothing
         names = fieldnames(x.index.columns)
         names[n] = name
-        NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true, names=names)
-    else
-        NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true)
     end
+    if vecagg !== nothing
+        y = NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, copy=false, names=names)
+        idxs, data = vec_aggregate_to(vecagg, y.index, y.data)
+        return NDSparse(idxs, data, copy=false)
+    end
+    NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true, names=names)
 end
 
-convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing, name=nothing) = convertdim(x, d, i->xlat[i], agg=agg, name=name)
+convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing, vecagg=nothing, name=nothing) = convertdim(x, d, i->xlat[i], agg=agg, vecagg=vecagg, name=name)
 
 convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
 

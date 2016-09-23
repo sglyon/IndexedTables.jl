@@ -48,8 +48,15 @@ function NDSparse{T,D,C}(I::Columns{D,C}, d::AbstractVector{T}; agg=nothing, pre
         I = I[p]
         d = d[p]
     elseif copy
-        I = Base.copy(I)
-        d = Base.copy(d)
+        if agg !== nothing
+            tempI, tempd = similar(I,0), similar(d,0)
+            aggregate!(agg, tempI, tempd, I, d)
+            I, d = tempI, tempd
+            agg = nothing
+        else
+            I = Base.copy(I)
+            d = Base.copy(d)
+        end
     end
     nd = NDSparse{T,dt,C,typeof(d)}(I, d, similar(I,0), similar(d,0))
     agg===nothing || aggregate!(agg, nd)
