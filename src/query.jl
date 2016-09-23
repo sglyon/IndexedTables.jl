@@ -85,7 +85,7 @@ end
 
 # the same, except returns a new vector where each element is computed
 # by applying `f` to a vector of all values associated with equal indexes.
-function vec_aggregate!(f, idxs::Columns, data)
+function aggregate_vec!(f, idxs::Columns, data)
     n = length(idxs)
     local newdata
     newlen = 0
@@ -111,7 +111,7 @@ function vec_aggregate!(f, idxs::Columns, data)
     newlen==0 ? Union{}[] : newdata
 end
 
-function vec_aggregate_to(f, src_idxs, src_data)
+function aggregate_vec_to(f, src_idxs, src_data)
     n = length(src_idxs)
     dest_idxs = similar(src_idxs,0)
     local newdata
@@ -136,7 +136,7 @@ function vec_aggregate_to(f, src_idxs, src_data)
 end
 
 # the same, but not modifying idxs
-function vec_aggregate(f, idxs::Columns, data)
+function aggregate_vec(f, idxs::Columns, data)
     n = length(idxs)
     local newdata
     newlen = 0
@@ -159,26 +159,28 @@ function vec_aggregate(f, idxs::Columns, data)
 end
 
 """
-`vec_aggregate!(f::Function, x::NDSparse)`
+`aggregate_vec(f::Function, x::NDSparse)`
 
 Combine adjacent rows with equal indices using a function from vector to scalar,
 e.g. `mean`.
 """
-function vec_aggregate(f, x::NDSparse)
-    idxs, data = vec_aggregate_to(f, x.index, x.data)
+function aggregate_vec(f, x::NDSparse)
+    idxs, data = aggregate_vec_to(f, x.index, x.data)
     NDSparse(idxs, data, presorted=true, copy=false)
 end
 
 """
-`vec_aggregate!(f::Vector{Function}, x::NDSparse)`
+`aggregate_vec(f::Vector{Function}, x::NDSparse)`
 
 Combine adjacent rows with equal indices using multiple functions from vector to scalar.
 The result has multiple data columns, one for each function, named based on the functions.
 """
-function vec_aggregate!(fs::Vector, x::NDSparse)
+function aggregate_vec(fs::Vector, x::NDSparse)
     n = length(fs)
-    datacols = [ (i==n ? vec_aggregate! : vec_aggregate)(fs[i], x.index, x.data) for i = 1:n ]
-    NDSparse(x.index, Columns(datacols..., names = map(Symbol, fs)),
+    n == 0 && return x
+    datacols = Any[ aggregate_vec(fs[i], x.index, x.data) for i = 1:n-1 ]
+    idx, lastcol = aggregate_vec_to(fs[n], x.index, x.data)
+    NDSparse(idx, Columns(datacols..., lastcol, names = map(Symbol, fs)),
              presorted=true)
 end
 
@@ -200,7 +202,7 @@ function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, vecagg=nothing, 
     end
     if vecagg !== nothing
         y = NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, copy=false, names=names)
-        idxs, data = vec_aggregate_to(vecagg, y.index, y.data)
+        idxs, data = aggregate_vec_to(vecagg, y.index, y.data)
         return NDSparse(idxs, data, copy=false)
     end
     NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true, names=names)
@@ -237,15 +239,14 @@ function reducedim_vec(f, x::NDSparse, dims)
     end
     cols = Columns(x.index.columns[[keep...]])
     if issorted(cols)
-        idxs = copy(cols)
-        xd = x.data
+        idxs, d = aggregate_vec_to(f, cols, x.data)
     else
         p = sortperm(cols)
         idxs = cols[p]
         xd = x.data[p]
+        d = aggregate_vec!(f, idxs, xd)
     end
-    d = vec_aggregate!(f, idxs, xd)
-    NDSparse(idxs, d, presorted=true)
+    NDSparse(idxs, d, presorted=true, copy=false)
 end
 
 reducedim_vec(f, x::NDSparse, dims::Symbol) = reducedim_vec(f, x, [dims])
