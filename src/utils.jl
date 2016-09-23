@@ -49,6 +49,12 @@ end
 fieldindex(x, i::Integer) = i
 fieldindex(x::NamedTuple, s::Symbol) = findfirst(x->x===s, fieldnames(x))
 
+astuple(t::Tuple) = t
+
+@generated function astuple(n::NamedTuple)
+    Expr(:tuple, [ Expr(:., :n, Expr(:quote, fieldname(n,f))) for f = 1:nfields(n) ]...)
+end
+
 # family of projection functions
 
 immutable Proj{field}; end

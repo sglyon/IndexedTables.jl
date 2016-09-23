@@ -19,11 +19,11 @@ _in(x, v::AbstractString) = x == v
 import Base: tail
 # test whether row r is within product(idxs...)
 #row_in(r::Tuple{}, idxs) = true
-row_in(r, idxs) = _row_in(r[1], idxs[1], tail(r), tail(idxs))
-@inline _row_in(r1, i1, rr, ri) = _in(r1,i1) & _row_in(rr[1], ri[1], tail(rr), tail(ri))
-@inline _row_in(r1, i1, rr::Tuple{}, ri) = _in(r1,i1)
+#row_in(r, idxs) = _row_in(r[1], idxs[1], tail(r), tail(idxs))
+#@inline _row_in(r1, i1, rr, ri) = _in(r1,i1) & _row_in(rr[1], ri[1], tail(rr), tail(ri))
+#@inline _row_in(r1, i1, rr::Tuple{}, ri) = _in(r1,i1)
 
-@inline row_in(I::Columns, r::Int, idxs) = _row_in(I.columns[1], r, idxs[1], tail(I.columns), tail(idxs))
+@inline row_in(cs, r::Integer, idxs) = _row_in(cs[1], r, idxs[1], tail(cs), tail(idxs))
 @inline _row_in(c1, r, i1, rI, ri) = _in(c1[r],i1) & _row_in(rI[1], r, ri[1], tail(rI), tail(ri))
 @inline _row_in(c1, r, i1, rI::Tuple{}, ri) = _in(c1[r],i1)
 
@@ -31,18 +31,31 @@ range_estimate(col, idx) = 1:length(col)
 range_estimate{T}(col::AbstractVector{T}, idx::T) = searchsortedfirst(col, idx):searchsortedlast(col,idx)
 range_estimate(col, idx::AbstractArray) = searchsortedfirst(col,first(idx)):searchsortedlast(col,last(idx))
 
+isconstrange(col, idx) = false
+isconstrange{T}(col::AbstractVector{T}, idx::T) = true
+isconstrange(col, idx::AbstractArray) = isequal(first(idx), last(idx))
+
+function range_estimate(I::Columns, idxs)
+    r = range_estimate(I.columns[1], idxs[1])
+    if isconstrange(I.columns[1], idxs[1])
+        r = intersect(r, range_estimate(I.columns[2], idxs[2]))
+    end
+    return r
+end
+
 index_by_col!(idx, col, out) = filt_by_col!(x->_in(x, idx), col, out)
 
 function _getindex(t::NDSparse, idxs)
     I = t.index
+    cs = astuple(I.columns)
     if length(idxs) != length(I.columns)
         error("wrong number of indices")
     end
     for idx in idxs
         isa(idx, AbstractVector) && (issorted(idx) || error("indices must be sorted for ranged/vector indexing"))
     end
-    out = convert(Vector{Int32}, range_estimate(I.columns[1], idxs[1]))
-    filter!(i->row_in(I[i], idxs), out)
+    out = convert(Vector{Int32}, range_estimate(I, idxs))
+    filter!(i->row_in(cs, i, idxs), out)
     # column-wise algorithm
     #for c in 2:ndims(t)
     #    index_by_col!(idxs[c], I.columns[c], out)
@@ -60,9 +73,10 @@ same index arguments as `getindex`.
 """
 function where{N}(d::NDSparse, idxs::Vararg{Any,N})
     I = d.index
+    cs = astuple(I.columns)
     data = d.data
-    rng = range_estimate(I.columns[1], idxs[1])
-    (data[i] for i in Filter(r->row_in(I[r], idxs), rng))
+    rng = range_estimate(I, idxs)
+    (data[i] for i in Filter(r->row_in(cs, r, idxs), rng))
 end
 
 """
@@ -73,10 +87,11 @@ indices.
 """
 function update!{N}(f::Union{Function,Type}, d::NDSparse, idxs::Vararg{Any,N})
     I = d.index
+    cs = astuple(I.columns)
     data = d.data
-    rng = range_estimate(I.columns[1], idxs[1])
+    rng = range_estimate(I, idxs)
     for r in rng
-        if row_in(I, r, idxs)
+        if row_in(cs, r, idxs)
             data[r] = f(data[r])
         end
     end
@@ -90,10 +105,11 @@ Replace data values with `val` at each location that matches the given indices.
 """
 function update!{N}(val, d::NDSparse, idxs::Vararg{Any,N})
     I = d.index
+    cs = astuple(I.columns)
     data = d.data
-    rng = range_estimate(I.columns[1], idxs[1])
+    rng = range_estimate(I, idxs)
     for r in rng
-        if row_in(I, r, idxs)
+        if row_in(cs, r, idxs)
             data[r] = val
         end
     end
@@ -110,9 +126,10 @@ Similar to `where`, but returns an iterator giving `index=>value` pairs.
 """
 function pairs{N}(d::NDSparse, idxs::Vararg{Any,N})
     I = d.index
+    cs = astuple(I.columns)
     data = d.data
-    rng = range_estimate(I.columns[1], idxs[1])
-    (I[i]=>data[i] for i in Filter(r->row_in(I[r], idxs), rng))
+    rng = range_estimate(I, idxs)
+    (I[i]=>data[i] for i in Filter(r->row_in(cs, r, idxs), rng))
 end
 
 # setindex!
