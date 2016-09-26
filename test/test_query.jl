@@ -8,6 +8,10 @@ let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], 
     @test length(c.index) == 2
     @test naturaljoin(a, b) == NDSparse([12,32], [52,34], Columns([11,150], [56,10]))
 
+    c = NDSparse([12,32], [52,34], Columns([0,1], [2,3]))
+    @test naturaljoin(a, c) == NDSparse([12,32], [52,34], Columns([11,150], [0,1], [2,3]))
+    @test naturaljoin(c, a) == NDSparse([12,32], [52,34], Columns([0,1], [2,3], [11,150]))
+
     c = select(a, 1=>x->x<30, 2=>x->x>40)
     @test c[12,52] == 11
     @test c[21,41] == 53
@@ -60,9 +64,14 @@ end
                           [1, 4, 3, 5, 2, 0], presorted=true), 2, x->div(x,3), vecagg=maximum) ==
                     NDSparse([1, 1], [0, 1], [4, 5])
 
-let A = rand(3,3), B = rand(3,3)
+let A = rand(3,3), B = rand(3,3), C = rand(3,3)
     nA = convert(NDSparse, A)
     nB = convert(NDSparse, B)
     nB.index.columns[1][:] += 3
     @test merge(nA,nB) == convert(NDSparse, vcat(A,B))
+    nC = convert(NDSparse, C)
+    nC.index.columns[1][:] += 6
+    @test merge(nA,nB,nC) == merge(nA,nC,nB) == convert(NDSparse, vcat(A,B,C))
+    merge!(nA,nB)
+    @test nA == convert(NDSparse, vcat(A,B))
 end

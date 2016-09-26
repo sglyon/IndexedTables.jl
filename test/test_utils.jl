@@ -30,6 +30,7 @@ end
 @test roundtrips(Columns(rand(5), rand(5)))
 @test roundtrips(Columns(c1 = rand(5), c2 = rand(5)))
 @test roundtrips(convert(NDSparse, rand(3,3)))
+@test roundtrips(NDSparse(Columns(y=rand(3), x=rand(3)), rand(3)))
 
 let x = rand(3), y = rand(3), v = rand(3), w = rand(3)
     @test vcat(Columns(x,y), Columns(v,w)) == Columns(vcat(x,v), vcat(y,w))

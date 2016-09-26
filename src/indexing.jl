@@ -48,8 +48,6 @@ function range_estimate(I::Columns, idxs)
     return r
 end
 
-index_by_col!(idx, col, out) = filt_by_col!(x->_in(x, idx), col, out)
-
 function _getindex(t::NDSparse, idxs)
     I = t.index
     cs = astuple(I.columns)
@@ -61,10 +59,6 @@ function _getindex(t::NDSparse, idxs)
     end
     out = convert(Vector{Int32}, range_estimate(I, idxs))
     filter!(i->row_in(cs, i, idxs), out)
-    # column-wise algorithm
-    #for c in 2:ndims(t)
-    #    index_by_col!(idxs[c], I.columns[c], out)
-    #end
     NDSparse(Columns(map(x->x[out], I.columns)), t.data[out], presorted=true)
 end
 
