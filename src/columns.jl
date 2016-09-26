@@ -2,7 +2,7 @@
 
 import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
-    summary, resize!, vcat, serialize, deserialize
+    summary, resize!, vcat, serialize, deserialize, append!, copy!
 
 export Columns
 
@@ -54,6 +54,10 @@ getindex{D,C}(c::Columns{D,C}, p::AbstractVector) = Columns{D,C}(map(c->c[p], c.
 setindex!(I::Columns, r::Tup, i::Integer) = (foreach((c,v)->(c[i]=v), I.columns, r); I)
 
 push!(I::Columns, r::Tup) = (foreach(push!, I.columns, r); I)
+
+append!(I::Columns, J::Columns) = (foreach(append!, I.columns, J.columns); I)
+
+copy!(I::Columns, J::Columns) = (foreach(copy!, I.columns, J.columns); I)
 
 resize!(I::Columns, n::Int) = (foreach(c->resize!(c,n), I.columns); I)
 

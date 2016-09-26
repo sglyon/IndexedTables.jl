@@ -4,7 +4,7 @@ using NamedTuples
 
 import Base:
     show, eltype, length, getindex, setindex!, ndims, map, convert,
-    ==, broadcast, broadcast!, empty!, copy, similar, sum, merge,
+    ==, broadcast, broadcast!, empty!, copy, similar, sum, merge, merge!,
     permutedims, reducedim, serialize, deserialize
 
 export NDSparse, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column,

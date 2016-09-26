@@ -206,6 +206,26 @@ function merge(x::NDSparse, xs::NDSparse...)
     error("this case of `merge` is not yet implemented")
 end
 
+# merge in place
+merge!{T,S,D<:Tuple}(x::NDSparse{T,D}, y::NDSparse{S,D}) = (flush!(x);flush!(y); _merge!(x, y))
+# merge! without flush!
+function _merge!(dst::NDSparse, src::NDSparse)
+    if isless(dst.index[end], src.index[1])
+        append!(dst.index, src.index)
+        append!(dst.data, src.data)
+    else
+        # merge to a new copy
+        new = _merge(dst, src)
+        ln = length(new)
+        # resize and copy data into dst
+        resize!(dst.index, ln)
+        copy!(dst.index, new.index)
+        resize!(dst.data, ln)
+        copy!(dst.data, new.data)
+    end
+    return dst
+end
+
 # broadcast join - repeat data along a dimension missing from one array
 
 tslice(t::Tuple, I) = ntuple(i->t[I[i]], length(I))

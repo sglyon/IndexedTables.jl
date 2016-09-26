@@ -186,26 +186,14 @@ Commit queued assignment operations, by sorting and merging the internal tempora
 """
 function flush!(t::NDSparse)
     if !isempty(t.data_buffer)
-        # 1. sort the buffer
-        p = sortperm(t.index_buffer)
-        ibuf = t.index_buffer[p]
-        dbuf = t.data_buffer[p]
-        temp = NDSparse(ibuf, dbuf)
-        aggregate!(right, temp)  # keep later values only
+        # 1. form sorted array of temp values, preferring values added later (`right`)
+        temp = NDSparse(t.index_buffer, t.data_buffer, copy=false, agg=right)
 
-        # 2. merge to a new copy
-        new = _merge(t, temp)
+        # 2. merge in
+        _merge!(t, temp)
 
-        # 3. resize and copy data into t
-        for i = 1:length(t.index.columns)
-            resize!(t.index.columns[i], length(new.index.columns[i]))
-            copy!(t.index.columns[i], new.index.columns[i])
-        end
-        resize!(t.data, length(new.data))
-        copy!(t.data, new.data)
-
-        # 4. clear buffer
-        for c in t.index_buffer.columns; empty!(c); end
+        # 3. clear buffer
+        empty!(t.index_buffer)
         empty!(t.data_buffer)
     end
     nothing
