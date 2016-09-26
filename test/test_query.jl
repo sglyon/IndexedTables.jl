@@ -6,6 +6,7 @@ let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], 
     @test c[12,52] == 67
     @test c[32,34] == 160
     @test length(c.index) == 2
+    @test naturaljoin(a, b) == NDSparse([12,32], [52,34], Columns([11,150], [56,10]))
 
     c = select(a, 1=>x->x<30, 2=>x->x>40)
     @test c[12,52] == 11
@@ -41,3 +42,27 @@ end
 @test asofjoin(NDSparse([:aapl,:ibm,:msft,:msft],[1,1,1,3],[4,5,6,7]),
                NDSparse([:aapl,:ibm,:msft],[0,0,0],[8,9,10])) ==
                    NDSparse([:aapl,:ibm,:msft,:msft],[1,1,1,3],[8,9,10,10])
+
+@test aggregate_vec(maximum,
+                    NDSparse([1, 1, 1, 1, 1, 1],
+                             [2, 2, 2, 3, 3, 3],
+                             [1, 4, 3, 5, 2, 0], presorted=true)) ==
+                    NDSparse([1, 1], [2, 3], [4, 5])
+
+@test aggregate_vec([maximum, minimum],
+                    NDSparse([1, 1, 1, 1, 1, 1],
+                             [2, 2, 2, 3, 3, 3],
+                             [1, 4, 3, 5, 2, 0], presorted=true)) ==
+                    NDSparse([1, 1], [2, 3], Columns(maximum=[4, 5], minimum=[1, 0]))
+
+@test convertdim(NDSparse([1, 1, 1, 1, 1, 1],
+                          [0, 1, 2, 3, 4, 5],
+                          [1, 4, 3, 5, 2, 0], presorted=true), 2, x->div(x,3), vecagg=maximum) ==
+                    NDSparse([1, 1], [0, 1], [4, 5])
+
+let A = rand(3,3), B = rand(3,3)
+    nA = convert(NDSparse, A)
+    nB = convert(NDSparse, B)
+    nB.index.columns[1][:] += 3
+    @test merge(nA,nB) == convert(NDSparse, vcat(A,B))
+end

@@ -74,6 +74,18 @@ let S = spdiagm(1:5)
     @test sum(nd[1:5, 1:5]) == 50
 end
 
+let S = sprand(10,10,.1), v = rand(10)
+    nd = convert(NDSparse, S)
+    ndv = convert(NDSparse,v)
+    @test broadcast(*, nd, ndv) == convert(NDSparse, S .* v)
+    # test matching dimensions by name
+    ndt0 = convert(NDSparse, S .* (v'))
+    ndt = NDSparse(Columns(a=ndt0.index.columns[1], b=ndt0.index.columns[2]), ndt0.data, presorted=true)
+    @test broadcast(*,
+                    NDSparse(Columns(a=nd.index.columns[1], b=nd.index.columns[2]), nd.data),
+                    NDSparse(Columns(b=ndv.index.columns[1]), ndv.data)) == ndt
+end
+
 let a = rand(10), b = rand(10), c = rand(10)
     @test NDSparse(a, b, c) == NDSparse(a, b, c)
     c2 = copy(c)
@@ -133,10 +145,13 @@ end
 let a = rand(5,5,5)
     for dims in ([2,3], [1], [2])
         r = squeeze(reducedim(+, a, dims), (dims...,))
-        b = reducedim(+, convert(NDSparse,a), dims)
+        asnd = convert(NDSparse,a)
+        b = reducedim(+, asnd, dims)
+        bv = reducedim_vec(sum, asnd, dims)
         c = convert(NDSparse, r)
-        @test b.index == c.index
+        @test b.index == c.index == bv.index
         @test_approx_eq b.data c.data
+        @test_approx_eq bv.data c.data
     end
     @test_throws ArgumentError reducedim(+, convert(NDSparse,a), [1,2,3])
 end
@@ -163,6 +178,7 @@ let x = NDSparse(Columns(x = [1,2,3], y = [4,5,6], z = [7,8,9]), [10,11,12])
     @test _colnames(select(x, :x=>a->a>1, :z=>a->a>7)) == names
     @test _colnames(x[1:2, 4:5, 8:9]) == names
     @test convertdim(x, :y, a->0) == NDSparse(Columns([1,2,3], [0,0,0], [7,8,9]), [10,11,12])
+    @test convertdim(x, :y, a->0, name=:yy) == NDSparse(Columns(x=[1,2,3], yy=[0,0,0], z=[7,8,9]), [10,11,12])
 end
 
 # test showing

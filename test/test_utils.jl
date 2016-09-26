@@ -15,3 +15,18 @@ let a = [1:10;]
     @test NDSparseData._sizehint!(1:10, 20) == 1:10
     @test NDSparseData._sizehint!(a, 20) === a
 end
+
+@test Columns([1,2], [3,4]) == Columns([1,2], [3.0,4.0])
+@test Columns([1,2], [3,4]) != Columns([1,2], [3.0,4.1])
+@test Columns([1,2], [3,4]) != Columns(a=[1,2], b=[3,4])
+
+let C = Columns(c1 = rand(5), c2 = rand(5))
+    b = IOBuffer()
+    serialize(b, C)
+    seekstart(b)
+    @test deserialize(b) == C
+end
+
+let x = rand(3), y = rand(3), v = rand(3), w = rand(3)
+    @test vcat(Columns(x,y), Columns(v,w)) == Columns(vcat(x,v), vcat(y,w))
+end

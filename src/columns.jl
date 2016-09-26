@@ -64,11 +64,13 @@ resize!(I::Columns, n::Int) = (foreach(c->resize!(c,n), I.columns); I)
 _sizehint!(c::Columns, n::Integer) = (foreach(c->_sizehint!(c,n), c.columns); c)
 
 function ==(x::Columns, y::Columns)
-    length(x.columns) == length(y.columns) || return false
+    nc = length(x.columns)
+    length(y.columns) == nc || return false
+    fieldnames(x.columns) == fieldnames(y.columns) || return false
     n = length(x)
     length(y) == n || return false
-    for i in 1:n
-        x[i] == y[i] || return false
+    for i in 1:nc
+        x.columns[i] == y.columns[i] || return false
     end
     return true
 end
