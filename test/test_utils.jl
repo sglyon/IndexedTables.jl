@@ -20,13 +20,18 @@ end
 @test Columns([1,2], [3,4]) != Columns([1,2], [3.0,4.1])
 @test Columns([1,2], [3,4]) != Columns(a=[1,2], b=[3,4])
 
-let C = Columns(c1 = rand(5), c2 = rand(5))
+function roundtrips(x)
     b = IOBuffer()
-    serialize(b, C)
+    serialize(b, x)
     seekstart(b)
-    @test deserialize(b) == C
+    return deserialize(b) == x
 end
+
+@test roundtrips(Columns(rand(5), rand(5)))
+@test roundtrips(Columns(c1 = rand(5), c2 = rand(5)))
+@test roundtrips(convert(NDSparse, rand(3,3)))
 
 let x = rand(3), y = rand(3), v = rand(3), w = rand(3)
     @test vcat(Columns(x,y), Columns(v,w)) == Columns(vcat(x,v), vcat(y,w))
+    @test vcat(Columns(x=x,y=y), Columns(x=v,y=w)) == Columns(x=vcat(x,v), y=vcat(y,w))
 end

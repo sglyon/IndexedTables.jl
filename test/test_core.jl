@@ -119,6 +119,11 @@ let a = NDSparse([1,2,2,2], [1,2,3,4], [10,9,8,7])
     @test collect(where(a, 2, :)) == [9,8,7]
     @test collect(pairs(a)) == [(1,1)=>10, (2,2)=>9, (2,3)=>8, (2,4)=>7]
     @test first(pairs(a, :, 3)) == ((2,3)=>8)
+
+    update!(x->x+10, a, 2, :)
+    @test a == NDSparse([1,2,2,2], [1,2,3,4], [10,19,18,17])
+    update!(77, a, 2, 2:3)
+    @test a == NDSparse([1,2,2,2], [1,2,3,4], [10,77,77,17])
 end
 
 let a = NDSparse([1,2,2,2], [1,2,3,4], zeros(4))
