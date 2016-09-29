@@ -45,7 +45,7 @@ end
 
 function flush_suite(cols, data, flushed_arr)
    suite = BenchmarkGroup(["Flush"])
-   suite["unflushed"] = @benchmarkable flush!(arr) setup=(arr = copy_unflushed($cols, $data))
+   #suite["unflushed"] = @benchmarkable flush!(arr) setup=(arr = copy_unflushed($cols, $data))
    suite["flushed"] = @benchmarkable flush!($flushed_arr)
    return suite
 end
@@ -94,9 +94,9 @@ function operations_suite(S::Int, N::Int, D::Int, cols, data, flushed_arr, filte
 
    suite = BenchmarkGroup(["Operations"])
 
-   suite["merge"] = @benchmarkable merge(target, to_merge) setup=(target = copy_flushed(cols, data); to_merge = copy_flushed($cols_, $data))
-   suite["naturaljoin"] = @benchmarkable naturaljoin(left, right, |) setup=(left = copy_flushed(cols, data); right = copy_flushed($cols_, $data))
-   suite["select"] = @benchmarkable select($flushed_arr, map(d -> d => filter_function, 1 : D)...)
+   suite["merge"] = @benchmarkable merge(target, to_merge) setup=(target = copy_flushed($cols, $data); to_merge = copy_flushed($cols_, $data))
+   suite["naturaljoin"] = @benchmarkable naturaljoin(left, right, |) setup=(left = copy_flushed($cols, $data); right = copy_flushed($cols_, $data))
+   suite["select"] = @benchmarkable select($flushed_arr, $(map(d -> d => filter_function, 1 : D))...)
    suite["filter"] = @benchmarkable filter($filter_function, $flushed_arr)
 end
 
