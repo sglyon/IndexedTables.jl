@@ -76,12 +76,42 @@ function ==(x::Columns, y::Columns)
 end
 
 function sortperm(c::Columns)
-    if length(c.columns) == 1
-        return sortperm(c.columns[1], alg=MergeSort)
+    x = c.columns[1]
+    p = sortperm(x)
+    for i = 2:length(c.columns)
+        y = c.columns[i]
+        if !refine_perm!(p, x, y)
+            break
+        end
+        x = y
     end
-    sort!([1:length(c);], lt=(x,y)->rowless(c, x, y), alg=MergeSort)
+    return p
 end
+
 issorted(c::Columns) = issorted(1:length(c), lt=(x,y)->rowless(c, x, y))
+
+# assuming x[p] is sorted, sort p by vector y within regions where x[p] is constant
+function refine_perm!(p, x, y)
+    temp = similar(p, 0)
+    order = Base.Order.By(j->(@inbounds k=y[j]; k))
+    i = 1
+    n = length(x)
+    changed = false
+    while i < n
+        i1 = i+1
+        @inbounds while i1 <= n && x[p[i1]] == x[p[i]]
+            i1 += 1
+        end
+        i1 -= 1
+        if i1 > i
+            changed = true
+            empty!(temp)
+            sort!(p, i, i1, MergeSort, order, temp)
+        end
+        i = i1+1
+    end
+    return changed
+end
 
 function permute!(c::Columns, p::AbstractVector)
     for v in c.columns
