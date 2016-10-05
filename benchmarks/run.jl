@@ -1,5 +1,5 @@
 using BenchmarkTools
-using NDSparseData
+using IndexedTables
 
 suite = BenchmarkGroup()
 

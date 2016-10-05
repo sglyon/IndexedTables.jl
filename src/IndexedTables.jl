@@ -1,4 +1,4 @@
-module NDSparseData
+module IndexedTables
 
 using NamedTuples
 

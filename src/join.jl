@@ -63,7 +63,7 @@ map{T,S,D}(f, x::NDSparse{T,D}, y::NDSparse{S,D}) = naturaljoin(x, y, f)
 
 # left join
 
-function leftjoin(left::NDSparse, right::NDSparse, op = NDSparseData.right)
+function leftjoin(left::NDSparse, right::NDSparse, op = IndexedTables.right)
     flush!(left); flush!(right)
     lI, rI = left.index, right.index
     lD, rD = left.data, right.data

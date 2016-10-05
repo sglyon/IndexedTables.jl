@@ -1,5 +1,5 @@
 using Base.Test
-using NDSparseData
+using IndexedTables
 
 let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
     c = naturaljoin(a, b, +)

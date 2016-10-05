@@ -1,5 +1,5 @@
 using Base.Test
-using NDSparseData
+using IndexedTables
 
 let a = Columns([1,2,1],["foo","bar","baz"]),
     b = Columns([2,1,1],["bar","baz","foo"]),

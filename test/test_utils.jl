@@ -1,19 +1,19 @@
 using Base.Test
-using NDSparseData
+using IndexedTables
 
 let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
-    p = collect(NDSparseData.product(a, b))
+    p = collect(IndexedTables.product(a, b))
     @test p == [(11,56), (11,13), (11,10), (53,56), (53,13), (53,10), (150,56), (150,13), (150,10)]
 
-    p = collect(NDSparseData.product(a, b, a))
+    p = collect(IndexedTables.product(a, b, a))
     @test p == [(11,56,11),(11,56,53),(11,56,150),(11,13,11),(11,13,53),(11,13,150),(11,10,11),(11,10,53),(11,10,150),
                 (53,56,11),(53,56,53),(53,56,150),(53,13,11),(53,13,53),(53,13,150),(53,10,11),(53,10,53),(53,10,150),
                 (150,56,11),(150,56,53),(150,56,150),(150,13,11),(150,13,53),(150,13,150),(150,10,11),(150,10,53),(150,10,150)]
 end
 
 let a = [1:10;]
-    @test NDSparseData._sizehint!(1:10, 20) == 1:10
-    @test NDSparseData._sizehint!(a, 20) === a
+    @test IndexedTables._sizehint!(1:10, 20) == 1:10
+    @test IndexedTables._sizehint!(a, 20) === a
 end
 
 @test Columns([1,2], [3,4]) == Columns([1,2], [3.0,4.0])
