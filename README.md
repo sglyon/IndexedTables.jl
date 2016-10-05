@@ -1,14 +1,16 @@
-[![Build Status](https://travis-ci.org/JuliaComputing/NDSparseData.jl.svg?branch=master)](https://travis-ci.org/JuliaComputing/NDSparseData.jl)
+[![Build Status](https://travis-ci.org/JuliaComputing/IndexedTables.jl.svg?branch=master)](https://travis-ci.org/JuliaComputing/IndexedTables.jl)
 
-[![codecov.io](http://codecov.io/github/JuliaComputing/NDSparseData.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaComputing/NDSparseData.jl?branch=master)
+[![codecov.io](http://codecov.io/github/JuliaComputing/IndexedTables.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaComputing/IndexedTables.jl?branch=master)
 
-# NDSparseData.jl
-N-dimensional sparse array structure in julia
+# IndexedTables.jl
+This package provides a table data structure where some of the columns form a sorted index.
+This structure is equivalent to an N-dimensional sparse array, and follows the array API
+to the extent possible.
 
 ## Introduction
 
-This package provides a data structure called `NDSparse`.
-This structure maps tuples of indices to data values.
+The data structure (called `NDSparse`) provided by this package maps tuples of indices
+to data values.
 Hence, it is similar to a hash table mapping tuples to values, but with a few key
 differences.
 First, the index tuples are stored columnwise, with one vector per index position:
