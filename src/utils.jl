@@ -116,3 +116,40 @@ function next{I1,I2}(p::Prod{I1,I2}, st)
     x = prod_next(p, st)
     ((x[1][1],x[1][2]...), x[2])
 end
+
+# sortperm with counting sort
+
+sortperm_fast(x; kwargs...) = sortperm(x, kwargs...)
+
+function sortperm_fast{T<:Integer}(v::Vector{T})
+    n = length(v)
+    if n > 1
+        min, max = extrema(v)
+        rangelen = max - min + 1
+        if rangelen < div(n,2)
+            return sortperm_int_range(v, rangelen, min)
+        end
+    end
+    return sortperm(v)
+end
+
+function sortperm_int_range{T<:Integer}(x::Vector{T}, rangelen, minval)
+    offs = 1 - minval
+    n = length(x)
+
+    where = fill(0, rangelen+1)
+    where[1] = 1
+    @inbounds for i = 1:n
+        where[x[i] + offs + 1] += 1
+    end
+    cumsum!(where, where)
+
+    P = Vector{Int}(n)
+    @inbounds for i = 1:n
+        label = x[i] + offs
+        P[where[label]] = i
+        where[label] += 1
+    end
+
+    return P
+end

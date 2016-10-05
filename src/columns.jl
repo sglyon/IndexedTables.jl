@@ -77,7 +77,7 @@ end
 
 function sortperm(c::Columns)
     x = c.columns[1]
-    p = sortperm(x)
+    p = sortperm_fast(x)
     for i = 2:length(c.columns)
         y = c.columns[i]
         if !refine_perm!(p, x, y)
