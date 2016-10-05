@@ -119,7 +119,7 @@ end
 
 # sortperm with counting sort
 
-sortperm_fast(x; kwargs...) = sortperm(x, kwargs...)
+sortperm_fast(x; alg=MergeSort, kwargs...) = sortperm(x, alg=alg, kwargs...)
 
 function sortperm_fast{T<:Integer}(v::Vector{T})
     n = length(v)
@@ -130,7 +130,7 @@ function sortperm_fast{T<:Integer}(v::Vector{T})
             return sortperm_int_range(v, rangelen, min)
         end
     end
-    return sortperm(v)
+    return sortperm(v, alg=MergeSort)
 end
 
 function sortperm_int_range{T<:Integer}(x::Vector{T}, rangelen, minval)
@@ -147,9 +147,63 @@ function sortperm_int_range{T<:Integer}(x::Vector{T}, rangelen, minval)
     P = Vector{Int}(n)
     @inbounds for i = 1:n
         label = x[i] + offs
-        P[where[label]] = i
-        where[label] += 1
+        wl = where[label]
+        P[wl] = i
+        where[label] = wl+1
     end
 
     return P
+end
+
+# sort the values in v[i0:i1] in place, by array `by`
+function sort_sub_by!(v, i0, i1, by, order, temp)
+    empty!(temp)
+    sort!(v, i0, i1, MergeSort, order, temp)
+end
+
+function sort_sub_by!{T<:Integer}(v, i0, i1, by::Vector{T}, order, temp)
+    min = max = by[v[i0]]
+    @inbounds for i = i0+1:i1
+        val = by[v[i]]
+        if val < min
+            min = val
+        elseif val > max
+            max = val
+        end
+    end
+    rangelen = max-min+1
+    n = i1-i0+1
+    if rangelen <= n
+        sort_int_range_sub_by!(v, i0-1, n, by, rangelen, min, temp)
+    else
+        empty!(temp)
+        sort!(v, i0, i1, MergeSort, order, temp)
+    end
+    v
+end
+
+# in-place counting sort of x[ioffs+1:ioffs+n] by values in `by`
+function sort_int_range_sub_by!(x, ioffs, n, by, rangelen, minval, temp)
+    offs = 1 - minval
+
+    where = fill(0, rangelen+1)
+    where[1] = 1
+    @inbounds for i = 1:n
+        where[by[x[i+ioffs]] + offs + 1] += 1
+    end
+    cumsum!(where, where)
+
+    length(temp) < n && resize!(temp, n)
+    @inbounds for i = 1:n
+        xi = x[i+ioffs]
+        label = by[xi] + offs
+        wl = where[label]
+        temp[wl] = xi
+        where[label] = wl+1
+    end
+
+    @inbounds for i = 1:n
+        x[i+ioffs] = temp[i]
+    end
+    x
 end

@@ -105,8 +105,7 @@ function refine_perm!(p, x, y)
         i1 -= 1
         if i1 > i
             changed = true
-            empty!(temp)
-            sort!(p, i, i1, MergeSort, order, temp)
+            sort_sub_by!(p, i, i1, y, order, temp)
         end
         i = i1+1
     end
