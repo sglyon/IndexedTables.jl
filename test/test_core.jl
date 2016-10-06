@@ -71,7 +71,7 @@ let S = spdiagm(1:5)
     @test sum(broadcast(+, nd, nd)) == 2*(sum(nd))
 
     nd[1:5,1:5] = 2
-    @test sum(nd[1:5, 1:5]) == 50
+    @test nd == convert(NDSparse, spdiagm(fill(2, 5)))
 end
 
 let S = sprand(10,10,.1), v = rand(10)
@@ -122,7 +122,8 @@ let a = NDSparse([1,2,2,2], [1,2,3,4], [10,9,8,7])
 
     update!(x->x+10, a, 2, :)
     @test a == NDSparse([1,2,2,2], [1,2,3,4], [10,19,18,17])
-    update!(77, a, 2, 2:3)
+
+    a[2,2:3] = 77
     @test a == NDSparse([1,2,2,2], [1,2,3,4], [10,77,77,17])
 end
 

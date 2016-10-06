@@ -1,4 +1,4 @@
-export naturaljoin, innerjoin, leftjoin, asofjoin
+export naturaljoin, innerjoin, leftjoin, asofjoin, leftjoin!
 
 ## Joins
 
@@ -89,6 +89,29 @@ function leftjoin(left::NDSparse, right::NDSparse, op = IndexedTables.right)
     data[i:ll] = lD[i:ll]
 
     NDSparse(copy(lI), data, presorted=true)
+end
+
+function leftjoin!(left::NDSparse, right::NDSparse, op = IndexedTables.right)
+    flush!(left); flush!(right)
+    lI, rI = left.index, right.index
+    lD, rD = left.data, right.data
+    ll, rr = length(lI), length(rI)
+
+    i = j = 1
+
+    while i <= ll && j <= rr
+        c = rowcmp(lI, i, rI, j)
+        if c < 0
+            i += 1
+        elseif c == 0
+            @inbounds lD[i] = op(lD[i], rD[j])
+            i += 1
+            j += 1
+        else
+            j += 1
+        end
+    end
+    left
 end
 
 # asof join

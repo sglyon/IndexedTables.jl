@@ -97,24 +97,6 @@ function update!{N}(f::Union{Function,Type}, d::NDSparse, idxs::Vararg{Any,N})
     d
 end
 
-"""
-`update!(val, arr::NDSparse, indices...)`
-
-Replace data values with `val` at each location that matches the given indices.
-"""
-function update!{N}(val, d::NDSparse, idxs::Vararg{Any,N})
-    I = d.index
-    cs = astuple(I.columns)
-    data = d.data
-    rng = range_estimate(I, idxs)
-    for r in rng
-        if row_in(cs, r, idxs)
-            data[r] = val
-        end
-    end
-    d
-end
-
 pairs(d::NDSparse) = (d.index[i]=>d.data[i] for i in 1:length(d))
 
 """
@@ -133,8 +115,15 @@ end
 
 # setindex!
 
-setindex!(t::NDSparse, rhs, idxs...) = _setindex!(t, rhs, fixi(t, idxs))
-setindex!(t::NDSparse, rhs, idxs::Real...) = _setindex!(t, rhs, idxs)
+setindex!(t::NDSparse, rhs, idxs...) = _setindex!(t, rhs, idxs)
+
+# assigning to an explicit set of indices --- equivalent to merge!
+
+setindex!(t::NDSparse, rhs, I::Columns) = setindex!(t, fill(rhs, length(I)), I) # TODO avoid `fill`
+
+setindex!(t::NDSparse, rhs::AbstractVector, I::Columns) = merge!(t, NDSparse(I, rhs, copy=false))
+
+# assigning a single item
 
 _setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs::D) = _setindex_scalar!(t, rhs, idxs)
 _setindex!(t::NDSparse, rhs::AbstractArray, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
@@ -147,30 +136,63 @@ function _setindex_scalar!(t, rhs, idxs)
     t
 end
 
+# vector assignment: works like a left join
+
 _setindex!(t::NDSparse, rhs::NDSparse, idxs::Tuple{Vararg{Real}}) = _setindex!(t, rhs.data, idxs)
 _setindex!(t::NDSparse, rhs::NDSparse, idxs) = _setindex!(t, rhs.data, idxs)
 
-@inline function fixi(t::NDSparse, n::Int, i1::Colon, irest...)
-    u = unique(t.index.columns[n])
-    (n==1 ? u : sort(u), fixi(t, n+1, irest...)...)
+function _setindex!{T,D}(d::NDSparse{T,D}, rhs::AbstractArray, idxs)
+    for idx in idxs
+        isa(idx, AbstractVector) && (issorted(idx) || error("indices must be sorted for ranged/vector indexing"))
+    end
+    flush!(d)
+    I = d.index
+    data = d.data
+    ll = length(I)
+    p = product(idxs...)
+    s = start(p)
+    done(p, s) && return d
+    R, s = next(p, s)
+    i = j = 1
+    L = I[i]
+    while i <= ll
+        c = cmp(L, R)
+        if c < 0
+            i += 1
+            L = I[i]
+        elseif c == 0
+            data[i] = rhs[j]
+            i += 1
+            L = I[i]
+            j += 1
+            done(p, s) && break
+            R, s = next(p, s)
+        else
+            j += 1
+            done(p, s) && break
+            R, s = next(p, s)
+        end
+    end
+    return d
 end
 
-fixi(t::NDSparse, n::Int, i1, irest...) = (i1, fixi(t, n+1, irest...)...)
-fixi(t::NDSparse, n::Int) = ()
-fixi(t::NDSparse, idxs) = fixi(t, 1, idxs...)
+# broadcast assignment of a single value into all matching locations
 
-function _setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs)
-    # TODO performance
-    for (x,I) in zip(rhs,product(idxs...))
-        _setindex!(t, x, convert(D, I))
+function _setindex!{T,D}(d::NDSparse{T,D}, rhs, idxs)
+    for idx in idxs
+        isa(idx, AbstractVector) && (issorted(idx) || error("indices must be sorted for ranged/vector indexing"))
     end
-end
-
-function _setindex!{T,D}(t::NDSparse{T,D}, rhs, idxs)
-    # TODO performance
-    for I in product(idxs...)
-        _setindex!(t, rhs, convert(D, I))
+    flush!(d)
+    I = d.index
+    cs = astuple(I.columns)
+    data = d.data
+    rng = range_estimate(I, idxs)
+    for r in rng
+        if row_in(cs, r, idxs)
+            data[r] = rhs
+        end
     end
+    d
 end
 
 """
