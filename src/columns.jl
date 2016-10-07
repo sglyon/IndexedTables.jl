@@ -80,6 +80,9 @@ function sortperm(c::Columns)
     p = sortperm_fast(x)
     for i = 2:length(c.columns)
         y = c.columns[i]
+        if isa(y, PooledArray)
+            y = y.refs
+        end
         if !refine_perm!(p, x, y)
             break
         end
@@ -167,6 +170,9 @@ end
 
 @inline cmpelts(a, i, j) = (@inbounds x=cmp(a[i], a[j]); x)
 @inline copyelt!(a, i, j) = (@inbounds a[i] = a[j])
+
+@inline cmpelts(a::PooledArray, i, j) = (x=cmp(a.refs[i],a.refs[j]); x)
+@inline copyelt!(a::PooledArray, i, j) = (a.refs[i] = a.refs[j])
 
 # row operations
 

@@ -1,6 +1,6 @@
 module IndexedTables
 
-using NamedTuples
+using NamedTuples, PooledArrays
 
 import Base:
     show, eltype, length, getindex, setindex!, ndims, map, convert,
