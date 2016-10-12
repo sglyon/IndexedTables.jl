@@ -35,7 +35,6 @@ in two cities:
     julia> hitemps = NDSparse([fill("New York",3); fill("Boston",3)],
                               repmat(Date(2016,7,6):Date(2016,7,8), 2),
                               [91,89,91,95,83,76])
-    NDSparse Tuple{String,Date} => Int64:
     ───────────────────────┬───
     "Boston"    2016-07-06 │ 95
     "Boston"    2016-07-07 │ 83
@@ -78,7 +77,6 @@ In other cases, a new `NDSparse` is returned, giving data for all matching
 locations:
 
     julia> hitemps["Boston", :]
-    NDSparse Tuple{String,Date} => Int64:
     ─────────────────────┬───
     "Boston"  2016-07-06 │ 95
     "Boston"  2016-07-07 │ 83
@@ -99,7 +97,6 @@ simply imagine passing the index columns to the constructor in a different order
 and repeating the sorting process:
 
     julia> permutedims(hitemps, [2, 1])
-    NDSparse Tuple{Date,String} => Int64:
     ───────────────────────┬───
     2016-07-06  "Boston"   │ 95
     2016-07-06  "New York" │ 91
@@ -120,7 +117,6 @@ when producing a simplified summary of data.
 This can be done by passing dimension (column) numbers to `select`:
 
     julia> select(hitemps, 2)
-    NDSparse Tuple{Date} => Int64:
     ───────────┬───
     2016-07-06 │ 95
     2016-07-06 │ 91
@@ -136,7 +132,6 @@ argument `agg`, a function to use to combine all values associated
 with the same indices:
 
     julia> select(hitemps, 2, agg=max)
-    NDSparse Tuple{Date} => Int64:
     ───────────┬───
     2016-07-06 │ 95
     2016-07-07 │ 89
@@ -150,7 +145,6 @@ function `aggregate!`.
 passing `column=>predicate` pairs:
 
     julia> select(hitemps, 2=>isfriday)
-    NDSparse Tuple{String,Date} => Int64:
     ───────────────────────┬───
     "Boston"    2016-07-08 │ 76
     "New York"  2016-07-08 │ 91
@@ -181,7 +175,6 @@ down by zip code:
                               repeat(Date(2016,7,6):Date(2016,7,8), inner=2),
                               repmat([02108,02134], 3),
                               [71,70,67,66,65,66])
-    NDSparse Tuple{String,Date,Int64} => Int64:
     ───────────────────────────┬───
     "Boston"  2016-07-06  2108 │ 71
     "Boston"  2016-07-06  2134 │ 70
@@ -197,7 +190,6 @@ The `broadcast` function implements this interpretation of the data,
 automatically repeating data along missing dimensions:
 
     julia> broadcast(-, hitemps, lotemps)
-    NDSparse Tuple{String,Date,Int64} => Int64:
     ───────────────────────────┬───
     "Boston"  2016-07-06  2108 │ 24
     "Boston"  2016-07-06  2134 │ 25
@@ -230,7 +222,6 @@ aggregation function is needed in case the mapping is many-to-one).
 The following call therefore gives monthly high temperatures:
 
     julia> convertdim(hitemps, 2, month, agg=max)
-    NDSparse Tuple{String,Int64} => Int64:
     ──────────────┬───
     "Boston"    7 │ 95
     "New York"  7 │ 91
@@ -267,7 +258,6 @@ Together, these features allow `NDSparse` arrays with named dimensions:
     julia> hitemps = NDSparse(Columns(city = [fill("New York",3); fill("Boston",3)],
                                       date = repmat(Date(2016,7,6):Date(2016,7,8), 2)),
                               [91,89,91,95,83,76])
-    NDSparse Tuple{String,Date} => Int64:
     city        date       │ 
     ───────────────────────┼───
     "Boston"    2016-07-06 │ 95
@@ -286,7 +276,6 @@ This provides one possible way to store multiple columns of data:
 
     julia> NDSparse(Columns(x = rand(4), y = rand(4)),
                     Columns(observation = rand(1:2,4), confidence = rand(4)))
-    NDSparse Tuple{Float64,Float64} => NamedTuples._NT_observationconfidence{Int64,Float64}:
     x          y        │ observation  confidence
     ────────────────────┼────────────────────────
     0.0400914  0.385859 │ 1            0.983784
@@ -298,7 +287,6 @@ In this case the data elements are structs with fields `observation`
 and `confidence`, and can be used as follows:
 
     julia> filter(d->d.confidence > 0.90, ans)
-    NDSparse Tuple{Array{Float64,1},Array{Float64,1}} => NamedTuples._NT_observationconfidence{Int64,Float64}:
     x          y        │ observation  confidence
     ────────────────────┼────────────────────────
     0.0400914  0.385859 │ 1            0.983784
