@@ -20,7 +20,9 @@ right(x, y) = y
 @inline ith_all(i, as) = (as[1][i], ith_all(i, tail(as))...)
 
 @generated function ith_all(i, n::NamedTuple)
-    Expr(:tuple, [ Expr(:ref, Expr(:., :n, Expr(:quote, fieldname(n,f))), :i) for f = 1:nfields(n) ]...)
+    Expr(:block,
+         :(@Base._inline_meta),
+         Expr(:tuple, [ Expr(:ref, Expr(:., :n, Expr(:quote, fieldname(n,f))), :i) for f = 1:nfields(n) ]...))
 end
 
 @generated function map(f, n::NamedTuple)
