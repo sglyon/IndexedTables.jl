@@ -51,9 +51,9 @@ getindex{D<:NamedTuple}(c::Columns{D}, i::Integer) = D(ith_all(i, c.columns)...)
 
 getindex{D,C}(c::Columns{D,C}, p::AbstractVector) = Columns{D,C}(map(c->c[p], c.columns))
 
-setindex!(I::Columns, r::Tup, i::Integer) = (foreach((c,v)->(c[i]=v), I.columns, r); I)
+@inline setindex!(I::Columns, r::Tup, i::Integer) = (foreach((c,v)->(c[i]=v), I.columns, r); I)
 
-push!(I::Columns, r::Tup) = (foreach(push!, I.columns, r); I)
+@inline push!(I::Columns, r::Tup) = (foreach(push!, I.columns, r); I)
 
 append!(I::Columns, J::Columns) = (foreach(append!, I.columns, J.columns); I)
 

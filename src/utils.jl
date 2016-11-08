@@ -43,9 +43,11 @@ end
 @inline _foreach(f, x, y, ra::Tuple{}, rb) = f(x, y)
 
 @generated function foreach(f, n::Union{Tuple,NamedTuple}, m::Union{Tuple,NamedTuple})
-    Expr(:block, [ Expr(:call, :f,
-                        Expr(:call, :getfield, :n, f),
-                        Expr(:call, :getfield, :m, f)) for f = 1:nfields(n) ]...)
+    Expr(:block,
+         :(@Base._inline_meta),
+         [ Expr(:call, :f,
+                Expr(:call, :getfield, :n, f),
+                Expr(:call, :getfield, :m, f)) for f = 1:nfields(n) ]...)
 end
 
 fieldindex(x, i::Integer) = i

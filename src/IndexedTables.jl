@@ -4,7 +4,7 @@ using NamedTuples, PooledArrays
 
 import Base:
     show, eltype, length, getindex, setindex!, ndims, map, convert,
-    ==, broadcast, broadcast!, empty!, copy, similar, sum, merge, merge!,
+    ==, broadcast, empty!, copy, similar, sum, merge, merge!,
     permutedims, reducedim, serialize, deserialize
 
 export NDSparse, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column,
@@ -98,16 +98,6 @@ eltype{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = T
 start(a::NDSparse) = start(a.data)
 next(a::NDSparse, st) = next(a.data, st)
 done(a::NDSparse, st) = done(a.data, st)
-
-# ensure array is in correct storage order -- meant for internal use
-function order!(t::NDSparse)
-    if !issorted(t.index)
-        p = sortperm(t.index)
-        permute!(t.index, p)
-        copy!(t.data, t.data[p])
-    end
-    return t
-end
 
 function permutedims(t::NDSparse, p::AbstractVector)
     if !(length(p) == ndims(t) && isperm(p))

@@ -251,8 +251,6 @@ end
 
 # broadcast join - repeat data along a dimension missing from one array
 
-tslice(t::Tuple, I) = ntuple(i->t[I[i]], length(I))
-
 function find_corresponding(Ap, Bp)
     matches = zeros(Int, length(Ap))
     J = IntSet(1:length(Bp))
@@ -312,59 +310,88 @@ function _broadcast_trailing!(f, A::NDSparse, B::NDSparse, C::NDSparse)
     return A
 end
 
-function broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse)
-    flush!(A); flush!(B); flush!(C)
-    B_inds = match_indices(A, B)
-    C_inds = match_indices(A, C)
-    all(i->B_inds[i] > 0 || C_inds[i] > 0, 1:ndims(A)) ||
-        error("some destination indices are uncovered")
-    if B_inds == ntuple(identity, ndims(A)) && C_inds[1:ndims(C)] == ntuple(identity, ndims(C))
-        return _broadcast_trailing!(f, A, B, C)
-    end
-    common = filter(i->B_inds[i] > 0 && C_inds[i] > 0, 1:ndims(A))
-    B_common = tslice(B_inds, common)
-    C_common = tslice(C_inds, common)
-    B_perm = sortperm(Columns(B.index.columns[[B_common...]]))
-    C_perm = sortperm(Columns(C.index.columns[[C_common...]]))
-    empty!(A)
-    m, n = length(B_perm), length(C_perm)
+function _bcast_loop!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse, B_common, B_perm)
+    m, n = length(B_perm), length(C)
     jlo = klo = 1
-    while jlo <= m && klo <= n
-        b_common = tslice(B.index[B_perm[jlo]], B_common)
-        c_common = tslice(C.index[C_perm[klo]], C_common)
-        x = cmp(b_common, c_common)
+    iperm = zeros(Int, m)
+    cnt = 0
+    @inbounds while jlo <= m && klo <= n
+        pjlo = B_perm[jlo]
+        x = rowcmp(B_common, pjlo, C.index, klo)
         x < 0 && (jlo += 1; continue)
         x > 0 && (klo += 1; continue)
-        jhi, khi = jlo + 1, klo + 1
-        while jhi <= m && tslice(B.index[B_perm[jhi]], B_common) == b_common
+        jhi = jlo + 1
+        while jhi <= m && roweq(B_common, B_perm[jhi], pjlo)
             jhi += 1
         end
-        while khi <= n && tslice(C.index[C_perm[khi]], C_common) == c_common
-            khi += 1
-        end
+        Ck = C.data[klo]
         for ji = jlo:jhi-1
             j = B_perm[ji]
-            b_row = B.index[j]
-            for ki = klo:khi-1
-                k = C_perm[ki]
-                c_row = C.index[k]
-                vals = ntuple(ndims(A)) do i
-                    B_inds[i] > 0 ? b_row[B_inds[i]] : c_row[C_inds[i]]
-                end
-                push!(A.index, vals)
-                push!(A.data, f(B.data[j], C.data[k]))
-            end
+            # the output has the same indices as B, except with some missing.
+            # invperm(B_perm) would put the indices we're using back into their
+            # original sort order, so we build up that inverse permutation in
+            # `iperm`, leaving some 0 gaps to be filtered out later.
+            cnt += 1
+            iperm[j] = cnt
+            push!(A.index, B.index[j])
+            push!(A.data, f(B.data[j], Ck))
         end
-        jlo, klo = jhi, khi
+        jlo, klo = jhi, klo+1
     end
-    order!(A)
+    filter!(i->i!=0, iperm)
 end
 
-function broadcast(f::Function, A::NDSparse, B::NDSparse)
-    if ndims(B) > ndims(A)
-        broadcast!((x,y)->f(y,x), similar(B), B, A)
+# broadcast C over B, into A. assumes A and B have same dimensions and ndims(B) >= ndims(C)
+function _broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse; dimmap=nothing)
+    flush!(A); flush!(B); flush!(C)
+    empty!(A)
+    if dimmap === nothing
+        C_inds = match_indices(A, C)
     else
-        broadcast!(f, similar(A), A, B)
+        C_inds = dimmap
+    end
+    C_dims = ntuple(identity, ndims(C))
+    if C_inds[1:ndims(C)] == C_dims
+        return _broadcast_trailing!(f, A, B, C)
+    end
+    common = filter(i->C_inds[i] > 0, 1:ndims(A))
+    C_common = C_inds[common]
+    B_common_cols = Columns(B.index.columns[common])
+    B_perm = sortperm(B_common_cols)
+    if C_common == C_dims
+        iperm = _bcast_loop!(f, A, B, C, B_common_cols, B_perm)
+        if !issorted(A.index)
+            permute!(A.index, iperm)
+            copy!(A.data, A.data[iperm])
+        end
+    else
+        # TODO
+        #C_perm = sortperm(Columns(C.index.columns[[C_common...]]))
+        error("dimensions of one argument to `broadcast` must be a subset of the dimensions of the other")
+    end
+    return A
+end
+
+"""
+`broadcast(f::Function, A::NDSparse, B::NDSparse; dimmap::Tuple{Vararg{Int}})`
+
+Compute an inner join of `A` and `B` using function `f`, where the dimensions
+of `B` are a subset of the dimensions of `A`. Values from `B` are repeated over
+the extra dimensions.
+
+`dimmap` optionally specifies how dimensions of `A` correspond to dimensions
+of `B`. It is a tuple where `dimmap[i]==j` means the `i`th dimension of `A`
+matches the `j`th dimension of `B`. Extra dimensions that do not match any
+dimensions of `j` should have `dimmap[i]==0`.
+
+If `dimmap` is not specified, it is determined automatically using index column
+names and types.
+"""
+function broadcast(f::Function, A::NDSparse, B::NDSparse; dimmap=nothing)
+    if ndims(B) > ndims(A)
+        _broadcast!((x,y)->f(y,x), similar(B), B, A, dimmap=dimmap)
+    else
+        _broadcast!(f, similar(A), A, B, dimmap=dimmap)
     end
 end
 
