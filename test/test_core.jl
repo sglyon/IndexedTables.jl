@@ -238,3 +238,7 @@ a  test │ x    y
 19 │ 1
 20 │ 1
 21 │ 1"""
+
+let x = Columns([6,5,4,3,2,2,1],[4,4,4,4,4,4,4],[1,2,3,4,5,6,7])
+    @test issorted(x[sortperm(x)])
+end

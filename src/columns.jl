@@ -76,43 +76,39 @@ function ==(x::Columns, y::Columns)
 end
 
 function sortperm(c::Columns)
-    x = c.columns[1]
+    cols = c.columns
+    x = cols[1]
     p = sortperm_fast(x)
-    for i = 2:length(c.columns)
-        y = c.columns[i]
-        if isa(y, PooledArray)
-            y = y.refs
-        end
-        if !refine_perm!(p, x, y)
-            break
-        end
-        x = y
+    if length(cols) > 1
+        y = cols[2]
+        refine_perm!(p, cols, 1, x, isa(y,PooledArray) ? y.refs : y, 1, length(x))
     end
     return p
 end
 
 issorted(c::Columns) = issorted(1:length(c), lt=(x,y)->rowless(c, x, y))
 
-# assuming x[p] is sorted, sort p by vector y within regions where x[p] is constant
-function refine_perm!(p, x, y)
+# assuming x[p] is sorted, sort by remaining columns where x[p] is constant
+function refine_perm!(p, cols, c, x, y, lo, hi)
     temp = similar(p, 0)
     order = Base.Order.By(j->(@inbounds k=y[j]; k))
-    i = 1
-    n = length(x)
-    changed = false
-    while i < n
+    nc = length(cols)
+    i = lo
+    while i < hi
         i1 = i+1
-        @inbounds while i1 <= n && x[p[i1]] == x[p[i]]
+        @inbounds while i1 <= hi && x[p[i1]] == x[p[i]]
             i1 += 1
         end
         i1 -= 1
         if i1 > i
-            changed = true
             sort_sub_by!(p, i, i1, y, order, temp)
+            if c < nc-1
+                z = cols[c+2]
+                refine_perm!(p, cols, c+1, y, isa(z,PooledArray) ? z.refs : z, i, i1)
+            end
         end
         i = i1+1
     end
-    return changed
 end
 
 function permute!(c::Columns, p::AbstractVector)
