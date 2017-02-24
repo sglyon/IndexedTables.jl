@@ -68,6 +68,17 @@ function aggregate!(f, x::NDSparse)
     x
 end
 
+"""
+`aggregate(f::Function, arr::NDSparse)`
+
+Combine adjacent rows with equal indices using the given 2-argument reduction function,
+returning the result in a new array.
+"""
+function aggregate(f, x::NDSparse)
+    idxs, data = aggregate_to(f, x.index, x.data)
+    NDSparse(idxs, data, presorted=true, copy=false)
+end
+
 # aggregate out of place, building up new indexes and data
 function aggregate_to(f, src_idxs, src_data)
     dest_idxs, dest_data = similar(src_idxs,0), similar(src_data,0)
@@ -190,11 +201,14 @@ function aggregate_vec(fs::Vector, x::NDSparse)
 end
 
 """
-`convertdim(x::NDSparse, d::DimName, xlate; agg::Function, name)`
+`convertdim(x::NDSparse, d::DimName, xlate; agg::Function, vecagg::Function, name)`
 
 Apply function or dictionary `xlate` to each index in the specified dimension.
-If the mapping is many-to-one, `agg` is used to aggregate the results.
-`name` optionally specifies a name for the new dimension.
+If the mapping is many-to-one, `agg` or `vecagg` is used to aggregate the results.
+If `agg` is passed, it is used as a 2-argument reduction function over the data.
+If `vecagg` is passed, it is used as a vector-to-scalar function to aggregate
+the data.
+`name` optionally specifies a new name for the translated dimension.
 """
 function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, vecagg=nothing, name=nothing)
     cols = x.index.columns
@@ -216,8 +230,6 @@ end
 convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing, vecagg=nothing, name=nothing) = convertdim(x, d, i->xlat[i], agg=agg, vecagg=vecagg, name=name)
 
 convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
-
-const aggregate = convertdim
 
 sum(x::NDSparse) = sum(x.data)
 
