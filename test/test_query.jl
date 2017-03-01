@@ -59,6 +59,12 @@ end
                              [1, 4, 3, 5, 2, 0], presorted=true)) ==
                     NDSparse([1, 1], [2, 3], Columns(maximum=[4, 5], minimum=[1, 0]))
 
+@test aggregate_vec(NDSparse([1, 1, 1, 1, 1, 1],
+                             [2, 2, 2, 3, 3, 3],
+                             [1, 4, 3, 5, 2, 0], presorted=true),
+                    maxv = maximum, minv = minimum) ==
+                    NDSparse([1, 1], [2, 3], Columns(maxv=[4, 5], minv=[1, 0]))
+
 @test convertdim(NDSparse([1, 1, 1, 1, 1, 1],
                           [0, 1, 2, 3, 4, 5],
                           [1, 4, 3, 5, 2, 0], presorted=true), 2, x->div(x,3), vecagg=maximum) ==

@@ -201,6 +201,30 @@ function aggregate_vec(fs::Vector, x::NDSparse)
 end
 
 """
+`aggregate_vec(x::NDSparse; funs...)`
+
+Combine adjacent rows with equal indices using multiple functions from vector to scalar.
+The result has multiple data columns, one for each function provided by `funs`.
+"""
+function aggregate_vec(x::NDSparse; funs...)
+    n = length(funs)
+    n == 0 && return x
+    datacols = Any[ _aggregate_vec(funs[i][2], x.index, x.data) for i = 1:n-1 ]
+    idx, lastcol = aggregate_vec_to(funs[n][2], x.index, x.data)
+    NDSparse(idx, Columns(datacols..., lastcol, names = [x[1] for x in funs]),
+             presorted=true)
+end
+function aggregate_vec(x::NDSparse, funs::Pair...)
+    n = length(funs)
+    n == 0 && return x
+    datacols = Any[ _aggregate_vec(funs[i][2], x.index, x.data) for i = 1:n-1 ]
+    idx, lastcol = aggregate_vec_to(funs[n][2], x.index, x.data)
+    NDSparse(idx, Columns(datacols..., lastcol, names = map(first, funs)),
+             presorted=true)
+end
+
+
+"""
 `convertdim(x::NDSparse, d::DimName, xlate; agg::Function, vecagg::Function, name)`
 
 Apply function or dictionary `xlate` to each index in the specified dimension.
