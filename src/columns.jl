@@ -133,8 +133,10 @@ end
 
 vcat(c::Columns, cs::Columns...) = Columns(map(vcat, map(x->x.columns, (c,cs...))...)...)
 
+abstract SerializedColumns
+
 function serialize(s::AbstractSerializer, c::Columns)
-    Base.Serializer.serialize_type(s, Columns)
+    Base.Serializer.serialize_type(s, SerializedColumns)
     serialize(s, eltype(c) <: NamedTuple)
     serialize(s, isa(c.columns, NamedTuple))
     serialize(s, fieldnames(c.columns))
@@ -143,7 +145,7 @@ function serialize(s::AbstractSerializer, c::Columns)
     end
 end
 
-function deserialize(s::AbstractSerializer, ::Type{Columns})
+function deserialize(s::AbstractSerializer, ::Type{SerializedColumns})
     Dnamed = deserialize(s)
     Cnamed = deserialize(s)
     fn = deserialize(s)

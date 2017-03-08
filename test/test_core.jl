@@ -79,7 +79,7 @@ let S = sprand(10,10,.1), v = rand(10)
     ndv = convert(NDSparse,v)
     @test broadcast(*, nd, ndv) == convert(NDSparse, S .* v)
     # test matching dimensions by name
-    ndt0 = convert(NDSparse, S .* (v'))
+    ndt0 = convert(NDSparse, sparse(S .* (v')))
     ndt = NDSparse(Columns(a=ndt0.index.columns[1], b=ndt0.index.columns[2]), ndt0.data, presorted=true)
     @test broadcast(*,
                     NDSparse(Columns(a=nd.index.columns[1], b=nd.index.columns[2]), nd.data),
@@ -241,4 +241,8 @@ a  test │ x    y
 
 let x = Columns([6,5,4,3,2,2,1],[4,4,4,4,4,4,4],[1,2,3,4,5,6,7])
     @test issorted(x[sortperm(x)])
+end
+
+let x = NDSparse([1,2],[3,4],[:a,:b],[3,5])
+    @test x[1,:,:a] == NDSparse([1],[3],[:a],[3])
 end

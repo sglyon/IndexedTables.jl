@@ -160,14 +160,16 @@ function show{T,D<:Tuple}(io::IO, t::NDSparse{T,D})
     end
 end
 
+abstract SerializedIndexedTable
+
 function serialize(s::AbstractSerializer, x::NDSparse)
     flush!(x)
-    Base.Serializer.serialize_type(s, NDSparse)
+    Base.Serializer.serialize_type(s, SerializedIndexedTable)
     serialize(s, x.index)
     serialize(s, x.data)
 end
 
-function deserialize(s::AbstractSerializer, ::Type{NDSparse})
+function deserialize(s::AbstractSerializer, ::Type{SerializedIndexedTable})
     I = deserialize(s)
     d = deserialize(s)
     NDSparse(I, d, presorted=true)

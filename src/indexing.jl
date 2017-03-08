@@ -15,6 +15,8 @@ _in(x, y) = in(x, y)
 _in(x, ::Colon) = true
 _in(x, v::AbstractVector) = (idx=searchsortedfirst(v, x); idx<=length(v) && v[idx]==x)
 _in(x, v::AbstractString) = x == v
+_in(x, v::Symbol) = x === v
+_in(x, v::Number) = isequal(x, v)
 
 import Base: tail
 # test whether row r is within product(idxs...)
