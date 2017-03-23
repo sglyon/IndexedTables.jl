@@ -1,7 +1,7 @@
 using Base.Test
 using IndexedTables
 
-let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
+let a = IndexedTable([12,21,32], [52,41,34], [11,53,150]), b = IndexedTable([12,23,32], [52,43,34], [56,13,10])
     p = collect(IndexedTables.product(a, b))
     @test p == [(11,56), (11,13), (11,10), (53,56), (53,13), (53,10), (150,56), (150,13), (150,10)]
 
@@ -29,8 +29,8 @@ end
 
 @test roundtrips(Columns(rand(5), rand(5)))
 @test roundtrips(Columns(c1 = rand(5), c2 = rand(5)))
-@test roundtrips(convert(NDSparse, rand(3,3)))
-@test roundtrips(NDSparse(Columns(y=rand(3), x=rand(3)), rand(3)))
+@test roundtrips(convert(IndexedTable, rand(3,3)))
+@test roundtrips(IndexedTable(Columns(y=rand(3), x=rand(3)), rand(3)))
 
 let x = rand(3), y = rand(3), v = rand(3), w = rand(3)
     @test vcat(Columns(x,y), Columns(v,w)) == Columns(vcat(x,v), vcat(y,w))
