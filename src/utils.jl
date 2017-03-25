@@ -71,7 +71,7 @@ pick(fld) = Proj{fld}()
 
 import Base: length, eltype, start, next, done
 
-abstract AbstractProdIterator
+@compat abstract type AbstractProdIterator end
 
 immutable Prod2{I1, I2} <: AbstractProdIterator
     a::I1

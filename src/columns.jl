@@ -1,5 +1,7 @@
 # a type that stores an array of tuples as a tuple of arrays
 
+using Compat
+
 import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
     summary, resize!, vcat, serialize, deserialize, append!, copy!
@@ -9,13 +11,13 @@ export Columns
 immutable Columns{D<:Tup, C<:Tup} <: AbstractVector{D}
     columns::C
 
-    function Columns(c)
+    @compat function (::Type{Columns{D,C}}){D<:Tup,C<:Tup}(c)
         length(c) > 0 || error("must have at least one column")
         n = length(c[1])
         for i = 2:length(c)
             length(c[i]) == n || error("all columns must have same length")
         end
-        new(c)
+        new{D,C}(c)
     end
 end
 
@@ -38,7 +40,7 @@ eltype{D,C}(::Type{Columns{D,C}}) = D
 length(c::Columns) = length(c.columns[1])
 ndims(c::Columns) = 1
 size(c::Columns) = (length(c),)
-linearindexing{T<:Columns}(::Type{T}) = Base.LinearFast()
+@compat Base.IndexStyle(::Type{<:Columns}) = IndexLinear()
 summary{D<:Tuple}(c::Columns{D}) = "Columns{$D}"
 
 empty!(c::Columns) = (foreach(empty!, c.columns); c)
@@ -133,7 +135,7 @@ end
 
 vcat(c::Columns, cs::Columns...) = Columns(map(vcat, map(x->x.columns, (c,cs...))...)...)
 
-abstract SerializedColumns
+@compat abstract type SerializedColumns end
 
 function serialize(s::AbstractSerializer, c::Columns)
     Base.Serializer.serialize_type(s, SerializedColumns)
