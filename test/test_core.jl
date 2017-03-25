@@ -156,8 +156,8 @@ let a = rand(5,5,5)
         bv = reducedim_vec(sum, asnd, dims)
         c = convert(IndexedTable, r)
         @test b.index == c.index == bv.index
-        @test_approx_eq b.data c.data
-        @test_approx_eq bv.data c.data
+        @test b.data ≈ c.data
+        @test bv.data ≈ c.data
     end
     @test_throws ArgumentError reducedim(+, convert(IndexedTable,a), [1,2,3])
 end

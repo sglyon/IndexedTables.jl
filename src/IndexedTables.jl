@@ -1,5 +1,6 @@
 module IndexedTables
 
+using Compat
 using NamedTuples, PooledArrays
 
 import Base:
@@ -165,7 +166,7 @@ function show{T,D<:Tuple}(io::IO, t::IndexedTable{T,D})
     end
 end
 
-abstract SerializedIndexedTable
+@compat abstract type SerializedIndexedTable end
 
 function serialize(s::AbstractSerializer, x::IndexedTable)
     flush!(x)

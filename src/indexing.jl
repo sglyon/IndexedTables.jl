@@ -77,7 +77,7 @@ function where{N}(d::IndexedTable, idxs::Vararg{Any,N})
     cs = astuple(I.columns)
     data = d.data
     rng = range_estimate(I, idxs)
-    (data[i] for i in Filter(r->row_in(cs, r, idxs), rng))
+    (data[i] for i in Compat.Iterators.Filter(r->row_in(cs, r, idxs), rng))
 end
 
 """
@@ -112,7 +112,7 @@ function pairs{N}(d::IndexedTable, idxs::Vararg{Any,N})
     cs = astuple(I.columns)
     data = d.data
     rng = range_estimate(I, idxs)
-    (I[i]=>data[i] for i in Filter(r->row_in(cs, r, idxs), rng))
+    (I[i]=>data[i] for i in Compat.Iterators.Filter(r->row_in(cs, r, idxs), rng))
 end
 
 # setindex!
