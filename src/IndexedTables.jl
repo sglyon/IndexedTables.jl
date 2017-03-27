@@ -9,7 +9,7 @@ import Base:
     permutedims, reducedim, serialize, deserialize
 
 export IndexedTable, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column,
-    update!, aggregate, reducedim_vec
+    update!, aggregate, reducedim_vec, dimlabels
 
 const Tup = Union{Tuple,NamedTuple}
 const DimName = Union{Int,Symbol}
@@ -100,6 +100,15 @@ end
 ndims(t::IndexedTable) = length(t.index.columns)
 length(t::IndexedTable) = (flush!(t);length(t.index))
 eltype{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = T
+dimlabels{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = fieldnames(C)
+
+"""
+`dimlabels(t::IndexedTable)`
+
+Returns an array of integers or symbols giving the labels for the dimensions of `t`.
+`ndims(t) == length(dimlabels(t))`.
+"""
+dimlabels(t::IndexedTable) = dimlabels(typeof(t))
 
 start(a::IndexedTable) = start(a.data)
 next(a::IndexedTable, st) = next(a.data, st)
