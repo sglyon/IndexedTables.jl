@@ -1,50 +1,50 @@
 filt_by_col!(f, col, indxs) = filter!(i->f(col[i]), indxs)
 
 """
-`select(arr::NDSparse, conditions::Pair...)`
+`select(arr::IndexedTable, conditions::Pair...)`
 
 Filter based on index columns. Conditions are accepted as column-function pairs.
 
 Example: `select(arr, 1 => x->x>10, 3 => x->x!=10 ...)`
 """
-function Base.select(arr::NDSparse, conditions::Pair...)
+function Base.select(arr::IndexedTable, conditions::Pair...)
     flush!(arr)
     indxs = [1:length(arr);]
     cols = arr.index.columns
     for (c,f) in conditions
         filt_by_col!(f, cols[c], indxs)
     end
-    NDSparse(Columns(map(x->x[indxs], cols)), arr.data[indxs], presorted=true)
+    IndexedTable(Columns(map(x->x[indxs], cols)), arr.data[indxs], presorted=true)
 end
 
 """
-`select(arr:NDSparse, which::DimName...; agg::Function)`
+`select(arr:IndexedTable, which::DimName...; agg::Function)`
 
 Select a subset of index columns. If the resulting array has duplicate index entries,
 `agg` is used to combine the values.
 """
-function Base.select(arr::NDSparse, which::DimName...; agg=nothing)
+function Base.select(arr::IndexedTable, which::DimName...; agg=nothing)
     flush!(arr)
-    NDSparse(Columns(arr.index.columns[[which...]]), arr.data, agg=agg, copy=true)
+    IndexedTable(Columns(arr.index.columns[[which...]]), arr.data, agg=agg, copy=true)
 end
 
 # Filter on data field
-function Base.filter(fn::Function, arr::NDSparse)
+function Base.filter(fn::Function, arr::IndexedTable)
     flush!(arr)
     data = arr.data
     indxs = filter(i->fn(data[i]), eachindex(data))
-    NDSparse(Columns(map(x->x[indxs], arr.index.columns)), data[indxs], presorted=true)
+    IndexedTable(Columns(map(x->x[indxs], arr.index.columns)), data[indxs], presorted=true)
 end
 
 # aggregation
 
 """
-`aggregate!(f::Function, arr::NDSparse)`
+`aggregate!(f::Function, arr::IndexedTable)`
 
 Combine adjacent rows with equal indices using the given 2-argument reduction function,
 in place.
 """
-function aggregate!(f, x::NDSparse)
+function aggregate!(f, x::IndexedTable)
     idxs, data = x.index, x.data
     n = length(idxs)
     newlen = 0
@@ -69,14 +69,14 @@ function aggregate!(f, x::NDSparse)
 end
 
 """
-`aggregate(f::Function, arr::NDSparse)`
+`aggregate(f::Function, arr::IndexedTable)`
 
 Combine adjacent rows with equal indices using the given 2-argument reduction function,
 returning the result in a new array.
 """
-function aggregate(f, x::NDSparse)
+function aggregate(f, x::IndexedTable)
     idxs, data = aggregate_to(f, x.index, x.data)
-    NDSparse(idxs, data, presorted=true, copy=false)
+    IndexedTable(idxs, data, presorted=true, copy=false)
 end
 
 # aggregate out of place, building up new indexes and data
@@ -175,48 +175,48 @@ function _aggregate_vec(f, idxs::Columns, data)
 end
 
 """
-`aggregate_vec(f::Function, x::NDSparse)`
+`aggregate_vec(f::Function, x::IndexedTable)`
 
 Combine adjacent rows with equal indices using a function from vector to scalar,
 e.g. `mean`.
 """
-function aggregate_vec(f, x::NDSparse)
+function aggregate_vec(f, x::IndexedTable)
     idxs, data = aggregate_vec_to(f, x.index, x.data)
-    NDSparse(idxs, data, presorted=true, copy=false)
+    IndexedTable(idxs, data, presorted=true, copy=false)
 end
 
-function _aggregate_vec(x::NDSparse, names::Vector, funs::Vector)
+function _aggregate_vec(x::IndexedTable, names::Vector, funs::Vector)
     n = length(funs)
     n == 0 && return x
     n != length(names) && return x
     datacols = Any[ _aggregate_vec(funs[i], x.index, x.data) for i = 1:n-1 ]
     idx, lastcol = aggregate_vec_to(funs[n], x.index, x.data)
-    NDSparse(idx, Columns(datacols..., lastcol, names = names), presorted=true)
+    IndexedTable(idx, Columns(datacols..., lastcol, names = names), presorted=true)
 end
 
 """
-`aggregate_vec(f::Vector{Function}, x::NDSparse)`
+`aggregate_vec(f::Vector{Function}, x::IndexedTable)`
 
 Combine adjacent rows with equal indices using multiple functions from vector to scalar.
 The result has multiple data columns, one for each function, named based on the functions.
 """
-function aggregate_vec(fs::Vector, x::NDSparse)
+function aggregate_vec(fs::Vector, x::IndexedTable)
     _aggregate_vec(x, map(Symbol, fs), fs)
 end
 
 """
-`aggregate_vec(x::NDSparse; funs...)`
+`aggregate_vec(x::IndexedTable; funs...)`
 
 Combine adjacent rows with equal indices using multiple functions from vector to scalar.
 The result has multiple data columns, one for each function provided by `funs`.
 """
-function aggregate_vec(x::NDSparse; funs...)
+function aggregate_vec(x::IndexedTable; funs...)
     _aggregate_vec(x, [x[1] for x in funs], [x[2] for x in funs])
 end
 
 
 """
-`convertdim(x::NDSparse, d::DimName, xlate; agg::Function, vecagg::Function, name)`
+`convertdim(x::IndexedTable, d::DimName, xlate; agg::Function, vecagg::Function, name)`
 
 Apply function or dictionary `xlate` to each index in the specified dimension.
 If the mapping is many-to-one, `agg` or `vecagg` is used to aggregate the results.
@@ -225,7 +225,7 @@ If `vecagg` is passed, it is used as a vector-to-scalar function to aggregate
 the data.
 `name` optionally specifies a new name for the translated dimension.
 """
-function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, vecagg=nothing, name=nothing)
+function convertdim(x::IndexedTable, d::DimName, xlat; agg=nothing, vecagg=nothing, name=nothing)
     cols = x.index.columns
     d2 = map(xlat, cols[d])
     n = fieldindex(cols, d)
@@ -235,20 +235,20 @@ function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, vecagg=nothing, 
         names[n] = name
     end
     if vecagg !== nothing
-        y = NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, copy=false, names=names)
+        y = IndexedTable(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, copy=false, names=names)
         idxs, data = aggregate_vec_to(vecagg, y.index, y.data)
-        return NDSparse(idxs, data, copy=false)
+        return IndexedTable(idxs, data, copy=false)
     end
-    NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true, names=names)
+    IndexedTable(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true, names=names)
 end
 
-convertdim(x::NDSparse, d::Int, xlat::Dict; agg=nothing, vecagg=nothing, name=nothing) = convertdim(x, d, i->xlat[i], agg=agg, vecagg=vecagg, name=name)
+convertdim(x::IndexedTable, d::Int, xlat::Dict; agg=nothing, vecagg=nothing, name=nothing) = convertdim(x, d, i->xlat[i], agg=agg, vecagg=vecagg, name=name)
 
-convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
+convertdim(x::IndexedTable, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
 
-sum(x::NDSparse) = sum(x.data)
+sum(x::IndexedTable) = sum(x.data)
 
-function reducedim(f, x::NDSparse, dims)
+function reducedim(f, x::IndexedTable, dims)
     keep = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
     if isempty(keep)
         throw(ArgumentError("to remove all dimensions, use `reduce(f, A)`"))
@@ -256,15 +256,15 @@ function reducedim(f, x::NDSparse, dims)
     select(x, keep..., agg=f)
 end
 
-reducedim(f, x::NDSparse, dims::Symbol) = reducedim(f, x, [dims])
+reducedim(f, x::IndexedTable, dims::Symbol) = reducedim(f, x, [dims])
 
 """
-`reducedim_vec(f::Function, arr::NDSparse, dims)`
+`reducedim_vec(f::Function, arr::IndexedTable, dims)`
 
 Like `reducedim`, except uses a function mapping a vector of values to a scalar instead
 of a 2-argument scalar function.
 """
-function reducedim_vec(f, x::NDSparse, dims)
+function reducedim_vec(f, x::IndexedTable, dims)
     keep = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
     if isempty(keep)
         throw(ArgumentError("to remove all dimensions, use `reduce(f, A)`"))
@@ -278,7 +278,7 @@ function reducedim_vec(f, x::NDSparse, dims)
         xd = x.data[p]
         d = _aggregate_vec!(f, idxs, xd)
     end
-    NDSparse(idxs, d, presorted=true, copy=false)
+    IndexedTable(idxs, d, presorted=true, copy=false)
 end
 
-reducedim_vec(f, x::NDSparse, dims::Symbol) = reducedim_vec(f, x, [dims])
+reducedim_vec(f, x::IndexedTable, dims::Symbol) = reducedim_vec(f, x, [dims])

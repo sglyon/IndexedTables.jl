@@ -1,9 +1,9 @@
 # getindex
 
-getindex(t::NDSparse, idxs...) = (flush!(t); _getindex(t, idxs))
+getindex(t::IndexedTable, idxs...) = (flush!(t); _getindex(t, idxs))
 
-_getindex{T,D<:Tuple}(t::NDSparse{T,D}, idxs::D) = _getindex_scalar(t, idxs)
-_getindex(t::NDSparse, idxs::Tuple{Vararg{Real}}) = _getindex_scalar(t, idxs)
+_getindex{T,D<:Tuple}(t::IndexedTable{T,D}, idxs::D) = _getindex_scalar(t, idxs)
+_getindex(t::IndexedTable, idxs::Tuple{Vararg{Real}}) = _getindex_scalar(t, idxs)
 
 function _getindex_scalar(t, idxs)
     i = searchsorted(t.index, idxs)
@@ -15,6 +15,8 @@ _in(x, y) = in(x, y)
 _in(x, ::Colon) = true
 _in(x, v::AbstractVector) = (idx=searchsortedfirst(v, x); idx<=length(v) && v[idx]==x)
 _in(x, v::AbstractString) = x == v
+_in(x, v::Symbol) = x === v
+_in(x, v::Number) = isequal(x, v)
 
 import Base: tail
 # test whether row r is within product(idxs...)
@@ -48,7 +50,7 @@ function range_estimate(I::Columns, idxs)
     return r
 end
 
-function _getindex(t::NDSparse, idxs)
+function _getindex(t::IndexedTable, idxs)
     I = t.index
     cs = astuple(I.columns)
     if length(idxs) != length(I.columns)
@@ -59,32 +61,32 @@ function _getindex(t::NDSparse, idxs)
     end
     out = convert(Vector{Int32}, range_estimate(I, idxs))
     filter!(i->row_in(cs, i, idxs), out)
-    NDSparse(Columns(map(x->x[out], I.columns)), t.data[out], presorted=true)
+    IndexedTable(Columns(map(x->x[out], I.columns)), t.data[out], presorted=true)
 end
 
 # iterators over indices - lazy getindex
 
 """
-`where(arr::NDSparse, indices...)`
+`where(arr::IndexedTable, indices...)`
 
 Returns an iterator over data items where the given indices match. Accepts the
 same index arguments as `getindex`.
 """
-function where{N}(d::NDSparse, idxs::Vararg{Any,N})
+function where{N}(d::IndexedTable, idxs::Vararg{Any,N})
     I = d.index
     cs = astuple(I.columns)
     data = d.data
     rng = range_estimate(I, idxs)
-    (data[i] for i in Filter(r->row_in(cs, r, idxs), rng))
+    (data[i] for i in Compat.Iterators.Filter(r->row_in(cs, r, idxs), rng))
 end
 
 """
-`update!(f::Function, arr::NDSparse, indices...)`
+`update!(f::Function, arr::IndexedTable, indices...)`
 
 Replace data values `x` with `f(x)` at each location that matches the given
 indices.
 """
-function update!{N}(f::Union{Function,Type}, d::NDSparse, idxs::Vararg{Any,N})
+function update!{N}(f::Union{Function,Type}, d::IndexedTable, idxs::Vararg{Any,N})
     I = d.index
     cs = astuple(I.columns)
     data = d.data
@@ -97,38 +99,38 @@ function update!{N}(f::Union{Function,Type}, d::NDSparse, idxs::Vararg{Any,N})
     d
 end
 
-pairs(d::NDSparse) = (d.index[i]=>d.data[i] for i in 1:length(d))
+pairs(d::IndexedTable) = (d.index[i]=>d.data[i] for i in 1:length(d))
 
 """
-`pairs(arr::NDSparse, indices...)`
+`pairs(arr::IndexedTable, indices...)`
 
 Similar to `where`, but returns an iterator giving `index=>value` pairs.
 `index` will be a tuple.
 """
-function pairs{N}(d::NDSparse, idxs::Vararg{Any,N})
+function pairs{N}(d::IndexedTable, idxs::Vararg{Any,N})
     I = d.index
     cs = astuple(I.columns)
     data = d.data
     rng = range_estimate(I, idxs)
-    (I[i]=>data[i] for i in Filter(r->row_in(cs, r, idxs), rng))
+    (I[i]=>data[i] for i in Compat.Iterators.Filter(r->row_in(cs, r, idxs), rng))
 end
 
 # setindex!
 
-setindex!(t::NDSparse, rhs, idxs...) = _setindex!(t, rhs, idxs)
+setindex!(t::IndexedTable, rhs, idxs...) = _setindex!(t, rhs, idxs)
 
 # assigning to an explicit set of indices --- equivalent to merge!
 
-setindex!(t::NDSparse, rhs, I::Columns) = setindex!(t, fill(rhs, length(I)), I) # TODO avoid `fill`
+setindex!(t::IndexedTable, rhs, I::Columns) = setindex!(t, fill(rhs, length(I)), I) # TODO avoid `fill`
 
-setindex!(t::NDSparse, rhs::AbstractVector, I::Columns) = merge!(t, NDSparse(I, rhs, copy=false))
+setindex!(t::IndexedTable, rhs::AbstractVector, I::Columns) = merge!(t, IndexedTable(I, rhs, copy=false))
 
 # assigning a single item
 
-_setindex!{T,D}(t::NDSparse{T,D}, rhs::AbstractArray, idxs::D) = _setindex_scalar!(t, rhs, idxs)
-_setindex!(t::NDSparse, rhs::AbstractArray, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
-_setindex!{T,D}(t::NDSparse{T,D}, rhs, idxs::D) = _setindex_scalar!(t, rhs, idxs)
-#_setindex!(t::NDSparse, rhs, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
+_setindex!{T,D}(t::IndexedTable{T,D}, rhs::AbstractArray, idxs::D) = _setindex_scalar!(t, rhs, idxs)
+_setindex!(t::IndexedTable, rhs::AbstractArray, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
+_setindex!{T,D}(t::IndexedTable{T,D}, rhs, idxs::D) = _setindex_scalar!(t, rhs, idxs)
+#_setindex!(t::IndexedTable, rhs, idxs::Tuple{Vararg{Real}}) = _setindex_scalar!(t, rhs, idxs)
 
 function _setindex_scalar!(t, rhs, idxs)
     push!(t.index_buffer, idxs)
@@ -138,10 +140,10 @@ end
 
 # vector assignment: works like a left join
 
-_setindex!(t::NDSparse, rhs::NDSparse, idxs::Tuple{Vararg{Real}}) = _setindex!(t, rhs.data, idxs)
-_setindex!(t::NDSparse, rhs::NDSparse, idxs) = _setindex!(t, rhs.data, idxs)
+_setindex!(t::IndexedTable, rhs::IndexedTable, idxs::Tuple{Vararg{Real}}) = _setindex!(t, rhs.data, idxs)
+_setindex!(t::IndexedTable, rhs::IndexedTable, idxs) = _setindex!(t, rhs.data, idxs)
 
-function _setindex!{T,D}(d::NDSparse{T,D}, rhs::AbstractArray, idxs)
+function _setindex!{T,D}(d::IndexedTable{T,D}, rhs::AbstractArray, idxs)
     for idx in idxs
         isa(idx, AbstractVector) && (issorted(idx) || error("indices must be sorted for ranged/vector indexing"))
     end
@@ -178,7 +180,7 @@ end
 
 # broadcast assignment of a single value into all matching locations
 
-function _setindex!{T,D}(d::NDSparse{T,D}, rhs, idxs)
+function _setindex!{T,D}(d::IndexedTable{T,D}, rhs, idxs)
     for idx in idxs
         isa(idx, AbstractVector) && (issorted(idx) || error("indices must be sorted for ranged/vector indexing"))
     end
@@ -196,14 +198,14 @@ function _setindex!{T,D}(d::NDSparse{T,D}, rhs, idxs)
 end
 
 """
-`flush!(arr::NDSparse)`
+`flush!(arr::IndexedTable)`
 
 Commit queued assignment operations, by sorting and merging the internal temporary buffer.
 """
-function flush!(t::NDSparse)
+function flush!(t::IndexedTable)
     if !isempty(t.data_buffer)
         # 1. form sorted array of temp values, preferring values added later (`right`)
-        temp = NDSparse(t.index_buffer, t.data_buffer, copy=false, agg=right)
+        temp = IndexedTable(t.index_buffer, t.data_buffer, copy=false, agg=right)
 
         # 2. merge in
         _merge!(t, temp)

@@ -6,11 +6,11 @@ using IndexedTables
 ###
 
 function copy_unflushed(cols, data)
-   NDSparse(Columns(map(c->similar(c, 0), cols)...), similar(data, 0), Columns(deepcopy(cols)...), copy(data))
+   IndexedTable(Columns(map(c->similar(c, 0), cols)...), similar(data, 0), Columns(deepcopy(cols)...), copy(data))
 end
 
 function copy_flushed(cols, data)
-   NDSparse(deepcopy(cols)..., copy(data))
+   IndexedTable(deepcopy(cols)..., copy(data))
 end
 
 ###
@@ -63,8 +63,8 @@ function build_suite(S, N, D, vect_size, cols, data, flushed_arr)
           vcat(rand(Int, sz), rand(sz), map(x->randstring(5), 1 : sz), bitrand(N - 3*sz))::Vector{Any}
        end
 
-       @bench "numeric" NDSparse(c..., d) setup=(c = deepcopy($cols); d = copy($numeric_data))
-       @bench "mixed" NDSparse(c..., d) setup=(c = deepcopy($cols); d = $mixed_data)
+       @bench "numeric" IndexedTable(c..., d) setup=(c = deepcopy($cols); d = copy($numeric_data))
+       @bench "mixed" IndexedTable(c..., d) setup=(c = deepcopy($cols); d = $mixed_data)
    end
 
    @benchgroup "Flush" ["Flush"] begin
@@ -93,9 +93,9 @@ function main()
    D = try parse(Int, ARGS[3]) catch 3 end                    # Number of dimensions.
    vect_size = try parse(Int, ARGS[4]) catch div(N, 10) end   # Size of vector indices
 
-   cols = [rand(1 : S, N) for _ in 1 : D]                     # Columns for NDSparse object
-   data = trues(N)                                            # Data for NDSparse object
-   flushed_arr = copy_flushed(cols, data)                     # NDSparse object)
+   cols = [rand(1 : S, N) for _ in 1 : D]                     # Columns for IndexedTable object
+   data = trues(N)                                            # Data for IndexedTable object
+   flushed_arr = copy_flushed(cols, data)                     # IndexedTable object)
 
    build_suite(S, N, D, vect_size, cols, data, flushed_arr)
 end
