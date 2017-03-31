@@ -1,4 +1,4 @@
 julia 0.5
 Compat 0.19
-NamedTuples
+NamedTuples 2.1.0
 PooledArrays
