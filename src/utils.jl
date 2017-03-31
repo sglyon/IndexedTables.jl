@@ -25,11 +25,6 @@ right(x, y) = y
          Expr(:tuple, [ Expr(:ref, Expr(:., :n, Expr(:quote, fieldname(n,f))), :i) for f = 1:nfields(n) ]...))
 end
 
-@generated function map(f, n::NamedTuple)
-    Expr(:call, Expr(:macrocall, Symbol("@NT"), fieldnames(n)...),
-         [ Expr(:call, :f, Expr(:., :n, Expr(:quote, fieldname(n,f)))) for f = 1:nfields(n) ]...)
-end
-
 @inline foreach(f, a::Tuple) = _foreach(f, a[1], tail(a))
 @inline _foreach(f, x, ra) = (f(x); _foreach(f, ra[1], tail(ra)))
 @inline _foreach(f, x, ra::Tuple{}) = f(x)
