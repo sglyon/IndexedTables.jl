@@ -185,6 +185,15 @@ function aggregate_vec(f, x::NDSparse)
     NDSparse(idxs, data, presorted=true, copy=false)
 end
 
+function _aggregate_vec(x::NDSparse, names::Vector, funs::Vector)
+    n = length(funs)
+    n == 0 && return x
+    n != length(names) && return x
+    datacols = Any[ _aggregate_vec(funs[i], x.index, x.data) for i = 1:n-1 ]
+    idx, lastcol = aggregate_vec_to(funs[n], x.index, x.data)
+    NDSparse(idx, Columns(datacols..., lastcol, names = names), presorted=true)
+end
+
 """
 `aggregate_vec(f::Vector{Function}, x::NDSparse)`
 
@@ -192,12 +201,7 @@ Combine adjacent rows with equal indices using multiple functions from vector to
 The result has multiple data columns, one for each function, named based on the functions.
 """
 function aggregate_vec(fs::Vector, x::NDSparse)
-    n = length(fs)
-    n == 0 && return x
-    datacols = Any[ _aggregate_vec(fs[i], x.index, x.data) for i = 1:n-1 ]
-    idx, lastcol = aggregate_vec_to(fs[n], x.index, x.data)
-    NDSparse(idx, Columns(datacols..., lastcol, names = map(Symbol, fs)),
-             presorted=true)
+    _aggregate_vec(x, map(Symbol, fs), fs)
 end
 
 """
@@ -207,20 +211,7 @@ Combine adjacent rows with equal indices using multiple functions from vector to
 The result has multiple data columns, one for each function provided by `funs`.
 """
 function aggregate_vec(x::NDSparse; funs...)
-    n = length(funs)
-    n == 0 && return x
-    datacols = Any[ _aggregate_vec(funs[i][2], x.index, x.data) for i = 1:n-1 ]
-    idx, lastcol = aggregate_vec_to(funs[n][2], x.index, x.data)
-    NDSparse(idx, Columns(datacols..., lastcol, names = [x[1] for x in funs]),
-             presorted=true)
-end
-function aggregate_vec(x::NDSparse, funs::Pair...)
-    n = length(funs)
-    n == 0 && return x
-    datacols = Any[ _aggregate_vec(funs[i][2], x.index, x.data) for i = 1:n-1 ]
-    idx, lastcol = aggregate_vec_to(funs[n][2], x.index, x.data)
-    NDSparse(idx, Columns(datacols..., lastcol, names = map(first, funs)),
-             presorted=true)
+    _aggregate_vec(x, [x[1] for x in funs], [x[2] for x in funs])
 end
 
 
