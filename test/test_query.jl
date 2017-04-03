@@ -80,4 +80,9 @@ let A = rand(3,3), B = rand(3,3), C = rand(3,3)
     @test merge(nA,nB,nC) == merge(nA,nC,nB) == convert(IndexedTable, vcat(A,B,C))
     merge!(nA,nB)
     @test nA == convert(IndexedTable, vcat(A,B))
+
+    t1 = IndexedTable(Columns(a=[1,1,2,2], b=[1,2,1,2]), [1,2,3,4])
+    t2 = IndexedTable(Columns(a=[0,1,2,3], b=[1,2,1,2]), [1,2,3,4])
+    @test merge(t1, t2, agg=+) == IndexedTable(Columns(a=[0,1,1,2,2,3], b=[1,1,2,1,2,2]), [1,1,4,6,4,4])
+    @test merge(t1, t2, agg=nothing) == IndexedTable(Columns(a=[0,1,1,1,2,2,2,3], b=[1,1,2,2,1,1,2,2]), [1,1,2,2,3,3,4,4])
 end
