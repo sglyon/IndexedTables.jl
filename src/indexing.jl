@@ -208,7 +208,7 @@ function flush!(t::IndexedTable)
         temp = IndexedTable(t.index_buffer, t.data_buffer, copy=false, agg=right)
 
         # 2. merge in
-        _merge!(t, temp)
+        _merge!(t, temp, right)
 
         # 3. clear buffer
         empty!(t.index_buffer)

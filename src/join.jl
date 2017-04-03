@@ -170,9 +170,9 @@ function count_overlap{D}(I::Columns{D}, J::Columns{D})
 end
 
 # assign y into x out-of-place
-merge{T,S,D<:Tuple}(x::IndexedTable{T,D}, y::IndexedTable{S,D}) = (flush!(x);flush!(y); _merge(x, y))
+merge{T,S,D<:Tuple}(x::IndexedTable{T,D}, y::IndexedTable{S,D}; agg = IndexedTables.right) = (flush!(x);flush!(y); _merge(x, y, agg))
 # merge without flush!
-function _merge{T,S,D}(x::IndexedTable{T,D}, y::IndexedTable{S,D})
+function _merge{T,S,D}(x::IndexedTable{T,D}, y::IndexedTable{S,D}, agg)
     I, J = x.index, y.index
     lI, lJ = length(I), length(J)
     #if isless(I[end], J[1])
@@ -180,22 +180,38 @@ function _merge{T,S,D}(x::IndexedTable{T,D}, y::IndexedTable{S,D})
     #elseif isless(J[end], I[1])
     #    return IndexedTable(vcat(y.index, x.index), vcat(y.data, x.data), presorted=true)
     #end
-    n = lI + lJ - count_overlap(I, J)
+    if agg === nothing
+        n = lI + lJ
+    else
+        n = lI + lJ - count_overlap(I, J)
+    end
+
     K = similar(I, n)::typeof(I)
     data = similar(x.data, n)
-    i = j = 1
-    @inbounds for k = 1:n
+    i = j = k = 1
+    @inbounds while k <= n
         if i <= lI && j <= lJ
             c = rowcmp(I, i, J, j)
-            if c >= 0
+            if c > 0
                 K[k] = J[j]
                 data[k] = y.data[j]
-                if c==0; i += 1; end
                 j += 1
-            else
+            elseif c < 0
                 K[k] = I[i]
                 data[k] = x.data[i]
                 i += 1
+            else
+                K[k] = I[i]
+                data[k] = x.data[i]
+                if isa(agg, Void)
+                    k += 1
+                    K[k] = I[i]
+                    data[k] = y.data[j] # repeat the data
+                else
+                    data[k] = agg(x.data[i], y.data[j])
+                end
+                i += 1
+                j += 1
             end
         elseif i <= lI
             # TODO: copy remaining data columnwise
@@ -209,11 +225,12 @@ function _merge{T,S,D}(x::IndexedTable{T,D}, y::IndexedTable{S,D})
         else
             break
         end
+        k += 1
     end
     IndexedTable(K, data, presorted=true)
 end
 
-function merge(x::IndexedTable, xs::IndexedTable...)
+function merge(x::IndexedTable, xs::IndexedTable...; agg = nothing, vecagg = nothing)
     as = [x, xs...]
     filter!(a->length(a)>0, as)
     length(as) == 0 && return x
@@ -230,15 +247,19 @@ function merge(x::IndexedTable, xs::IndexedTable...)
 end
 
 # merge in place
-merge!{T,S,D<:Tuple}(x::IndexedTable{T,D}, y::IndexedTable{S,D}) = (flush!(x);flush!(y); _merge!(x, y))
+function merge!{T,S,D<:Tuple}(x::IndexedTable{T,D}, y::IndexedTable{S,D}; agg = IndexedTables.right)
+    flush!(x)
+    flush!(y)
+    _merge!(x, y, agg)
+end
 # merge! without flush!
-function _merge!(dst::IndexedTable, src::IndexedTable)
+function _merge!(dst::IndexedTable, src::IndexedTable, f)
     if isless(dst.index[end], src.index[1])
         append!(dst.index, src.index)
         append!(dst.data, src.data)
     else
         # merge to a new copy
-        new = _merge(dst, src)
+        new = _merge(dst, src, f)
         ln = length(new)
         # resize and copy data into dst
         resize!(dst.index, ln)
