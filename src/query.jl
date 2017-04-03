@@ -185,6 +185,15 @@ function aggregate_vec(f, x::IndexedTable)
     IndexedTable(idxs, data, presorted=true, copy=false)
 end
 
+function _aggregate_vec(x::IndexedTable, names::Vector, funs::Vector)
+    n = length(funs)
+    n == 0 && return x
+    n != length(names) && return x
+    datacols = Any[ _aggregate_vec(funs[i], x.index, x.data) for i = 1:n-1 ]
+    idx, lastcol = aggregate_vec_to(funs[n], x.index, x.data)
+    IndexedTable(idx, Columns(datacols..., lastcol, names = names), presorted=true)
+end
+
 """
 `aggregate_vec(f::Vector{Function}, x::IndexedTable)`
 
@@ -192,13 +201,19 @@ Combine adjacent rows with equal indices using multiple functions from vector to
 The result has multiple data columns, one for each function, named based on the functions.
 """
 function aggregate_vec(fs::Vector, x::IndexedTable)
-    n = length(fs)
-    n == 0 && return x
-    datacols = Any[ _aggregate_vec(fs[i], x.index, x.data) for i = 1:n-1 ]
-    idx, lastcol = aggregate_vec_to(fs[n], x.index, x.data)
-    IndexedTable(idx, Columns(datacols..., lastcol, names = map(Symbol, fs)),
-                 presorted=true)
+    _aggregate_vec(x, map(Symbol, fs), fs)
 end
+
+"""
+`aggregate_vec(x::IndexedTable; funs...)`
+
+Combine adjacent rows with equal indices using multiple functions from vector to scalar.
+The result has multiple data columns, one for each function provided by `funs`.
+"""
+function aggregate_vec(x::IndexedTable; funs...)
+    _aggregate_vec(x, [x[1] for x in funs], [x[2] for x in funs])
+end
+
 
 """
 `convertdim(x::IndexedTable, d::DimName, xlate; agg::Function, vecagg::Function, name)`
