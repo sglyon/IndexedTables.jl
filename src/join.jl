@@ -230,7 +230,7 @@ function _merge{T,S,D}(x::IndexedTable{T,D}, y::IndexedTable{S,D}, agg)
     IndexedTable(K, data, presorted=true)
 end
 
-function merge(x::IndexedTable, xs::IndexedTable...; agg = nothing, vecagg = nothing)
+function merge(x::IndexedTable, xs::IndexedTable...; agg = nothing)
     as = [x, xs...]
     filter!(a->length(a)>0, as)
     length(as) == 0 && return x
