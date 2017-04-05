@@ -234,7 +234,7 @@ function merge(x::IndexedTable, xs::IndexedTable...; agg = nothing)
     as = [x, xs...]
     filter!(a->length(a)>0, as)
     length(as) == 0 && return x
-    length(as) == 1 && return a[1]
+    length(as) == 1 && return as[1]
     for a in as; flush!(a); end
     sort!(as, by=y->first(y.index))
     if all(i->isless(as[i-1].index[end], as[i].index[1]), 2:length(as))
