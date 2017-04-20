@@ -246,3 +246,13 @@ end
 let x = IndexedTable([1,2],[3,4],[:a,:b],[3,5])
     @test x[1,:,:a] == IndexedTable([1],[3],[:a],[3])
 end
+
+# issue #42
+using Base.Dates
+let hitemps = IndexedTable([fill("New York",3); fill("Boston",3)],
+                           repmat(Date(2016,7,6):Date(2016,7,8), 2),
+                           [91,89,91,95,83,76])
+    @test hitemps[:, Date(2016,7,8)] == IndexedTable(["New York", "Boston"],
+                                                     fill(Date(2016,7,8), 2),
+                                                     [91,76])
+end

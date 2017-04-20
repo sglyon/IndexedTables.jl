@@ -11,7 +11,8 @@ function _getindex_scalar(t, idxs)
     t.data[first(i)]
 end
 
-_in(x, y) = in(x, y)
+# branch instead of diagonal dispatch to avoid ambiguities
+_in(x, y) = isa(x,typeof(y)) ? isequal(x, y) : in(x, y)
 _in(x, ::Colon) = true
 _in(x, v::AbstractVector) = (idx=searchsortedfirst(v, x); idx<=length(v) && v[idx]==x)
 _in(x, v::AbstractString) = x == v
