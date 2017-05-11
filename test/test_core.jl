@@ -20,6 +20,8 @@ let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
     e = Columns([1,1,1], sort([rand(),0.5,rand()])),
     f = Columns([1,1,1], sort([rand(),0.5,rand()]))
     @test merge(IndexedTable(c,ones(5)),IndexedTable(d,ones(5))).index == Columns([1,1,1,1,2,2,2,2],[1,2,3,4,1,3,4,5])
+    @test eltype(merge(IndexedTable(c,Columns(ones(Int, 5))),IndexedTable(d,Columns(ones(Float64, 5)))).data) == Tuple{Float64}
+    @test eltype(merge(IndexedTable(c,Columns(x=ones(Int, 5))),IndexedTable(d,Columns(x=ones(Float64, 5)))).data) == NamedTuples.@NT(x){Float64}
     @test length(merge(IndexedTable(e,ones(3)),IndexedTable(f,ones(3)))) == 5
     @test summary(c) == "Columns{Tuple{Int64,Int64}}"
 end
