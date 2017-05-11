@@ -169,6 +169,14 @@ function count_overlap{D}(I::Columns{D}, J::Columns{D})
     return overlap
 end
 
+function promoted_similar(x::Columns, y::Columns, n)
+    Columns(map((a,b)->promoted_similar(a, b, n), x.columns, y.columns))
+end
+
+function promoted_similar(x::AbstractArray, y::AbstractArray, n)
+    similar(x, promote_type(eltype(x),eltype(y)), n)
+end
+
 # assign y into x out-of-place
 merge{T,S,D<:Tuple}(x::IndexedTable{T,D}, y::IndexedTable{S,D}; agg = IndexedTables.right) = (flush!(x);flush!(y); _merge(x, y, agg))
 # merge without flush!
@@ -186,8 +194,15 @@ function _merge{T,S,D}(x::IndexedTable{T,D}, y::IndexedTable{S,D}, agg)
         n = lI + lJ - count_overlap(I, J)
     end
 
-    K = similar(I, n)::typeof(I)
-    data = similar(x.data, n)
+    K = promoted_similar(I, J, n)
+    data = promoted_similar(x.data, y.data, n)
+    _merge!(K, data, x, y, agg)
+end
+
+function _merge!(K, data, x::IndexedTable, y::IndexedTable, agg)
+    I, J = x.index, y.index
+    lI, lJ = length(I), length(J)
+    n = length(K)
     i = j = k = 1
     @inbounds while k <= n
         if i <= lI && j <= lJ
