@@ -1,5 +1,6 @@
 using Base.Test
 using IndexedTables
+using PooledArrays
 
 let a = Columns([1,2,1],["foo","bar","baz"]),
     b = Columns([2,1,1],["bar","baz","foo"]),
@@ -23,6 +24,8 @@ let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
     @test eltype(merge(IndexedTable(c,Columns(ones(Int, 5))),IndexedTable(d,Columns(ones(Float64, 5)))).data) == Tuple{Float64}
     @test eltype(merge(IndexedTable(c,Columns(x=ones(Int, 5))),IndexedTable(d,Columns(x=ones(Float64, 5)))).data) == NamedTuples.@NT(x){Float64}
     @test length(merge(IndexedTable(e,ones(3)),IndexedTable(f,ones(3)))) == 5
+    @test vcat(Columns(x=[1]), Columns(x=[1.0])) == Columns(x=[1,1.0])
+    @test vcat(Columns(x=PooledArray(["x"])), Columns(x=["y"])) == Columns(x=["x", "y"])
     @test summary(c) == "Columns{Tuple{Int64,Int64}}"
 end
 

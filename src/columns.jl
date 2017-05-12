@@ -128,12 +128,18 @@ map(p::Proj, c::Columns) = p(c.columns)
 vcat{D<:Tup,C<:Tuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}((map(vcat, map(x->x.columns, (c,cs...))...)...,))
 vcat{D<:Tup,C<:NamedTuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}(C(map(vcat, map(x->x.columns, (c,cs...))...)...,))
 
-function vcat{D<:Tup}(c::Columns{D}, cs::Columns{D}...)
-    cols = (map(vcat, map(x->x.columns, (c,cs...))...)...,)
-    Columns{D,typeof(cols)}(cols)
+function Base.vcat(c::Columns, cs::Columns...)
+    fns = map(fieldnames, (map(x->x.columns, (c, cs...))))
+    f1 = fns[1]
+    for f2 in fns[2:end]
+        if f1 != f2
+            errfields = join(map(string, fns), ", ", " and ")
+            throw(ArgumentError("Cannot concatenate columns with fields $errfields"))
+        end
+    end
+    names = all(isa.(f1, Symbol)) ? f1 : nothing
+    Columns(map(vcat, map(x->x.columns, (c,cs...))...))
 end
-
-vcat(c::Columns, cs::Columns...) = Columns(map(vcat, map(x->x.columns, (c,cs...))...)...)
 
 @compat abstract type SerializedColumns end
 
