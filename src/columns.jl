@@ -122,8 +122,8 @@ end
 sort!(c::Columns) = permute!(c, sortperm(c))
 sort(c::Columns) = c[sortperm(c)]
 
+map(p::ProjFn, c::Columns) = Columns(p(c.columns))
 map(p::Proj, c::Columns) = p(c.columns)
-(p::Proj)(c::Columns) = p(c.columns)
 
 vcat{D<:Tup,C<:Tuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}((map(vcat, map(x->x.columns, (c,cs...))...)...,))
 vcat{D<:Tup,C<:NamedTuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}(C(map(vcat, map(x->x.columns, (c,cs...))...)...,))

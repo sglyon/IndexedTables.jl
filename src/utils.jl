@@ -2,6 +2,8 @@ using Base.Test
 import Base: tuple_type_cons, tuple_type_head, tuple_type_tail, in, ==, isless, convert,
              length, eltype, start, next, done, show
 
+export @pick, pick
+
 eltypes(::Type{Tuple{}}) = Tuple{}
 eltypes{T<:Tuple}(::Type{T}) =
     tuple_type_cons(eltype(tuple_type_head(T)), eltypes(tuple_type_tail(T)))
@@ -56,9 +58,52 @@ end
 
 # family of projection functions
 
-immutable Proj{field}; end
+immutable ProjFn{F}
+    f::F
+end
 
-(::Proj{field}){field}(x) = getfield(x, field)
+(p::ProjFn)(x::Tup) = p.f(x)
+
+immutable Proj{f} end
+
+function (p::Proj{f}){f}(x::Tup)
+    getfield(x, f)
+end
+
+"""
+    @pick(fields...)
+
+Returns a callable object `f` such that `f(x::Tuple)` returns a `Tuple` with only
+elements of index specified by `fields`, `f(x::NamedTuple)` return a `Tuple` if
+`fields` are integers, or a `NamedTuple` if `fields` are symbols with only the specified
+fields in the output.
+
+The callable is specialized to work efficiently on `Columns` by calling it once
+on `.columns` field to get the equivalent result.
+
+Calling `map` on an `IndexedTable` with a `@pick` callable will run the callable on
+the data columns.
+
+# Examples
+    c = Columns(x=[1], y=[2.0])
+    @pick(2)(c) == Columns([2.0])
+    @pick(y)(c) == Columns(y=[2.0])
+    @pick(2,1)(c) == Columns([2.0], [1])
+    @pick(y,x)(c) == Columns(y=[2.0], x=[1])
+
+    t = IndexedTable([1], c)
+    map(@pick(y, x), t) == IndexedTables([1], Columns(y=[2.0], x=[1]))
+"""
+macro pick(ex...)
+    tup = if all([isa(x, Symbol) for x in ex])
+        # Named tuple
+        args = [:(getfield(x, $(Expr(:quote, f)))) for f in ex]
+        Expr(:macrocall, :(NamedTuples.$(Symbol("@NT"))), map((x,y) -> :($x=$y), map(esc, ex), args)...)
+    else
+        :(($([:(getfield(x, $f)) for f in ex]...),))
+    end
+    :(IndexedTables.ProjFn(x -> $tup))
+end
 
 pick(fld) = Proj{fld}()
 
