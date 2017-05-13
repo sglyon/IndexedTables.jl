@@ -137,7 +137,6 @@ function Base.vcat(c::Columns, cs::Columns...)
             throw(ArgumentError("Cannot concatenate columns with fields $errfields"))
         end
     end
-    names = all(isa.(f1, Symbol)) ? f1 : nothing
     Columns(map(vcat, map(x->x.columns, (c,cs...))...))
 end
 
