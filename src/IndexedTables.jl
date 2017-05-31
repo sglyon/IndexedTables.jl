@@ -77,7 +77,7 @@ function IndexedTable(columns...; names=nothing, rest...)
     IndexedTable(Columns(keys..., names=names), data; rest...)
 end
 
-similar(t::IndexedTable) = IndexedTable(similar(t.index), empty!(similar(t.data)))
+similar(t::IndexedTable) = IndexedTable(similar(t.index, 0), similar(t.data, 0))
 
 function copy(t::IndexedTable)
     flush!(t)
