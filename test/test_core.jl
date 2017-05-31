@@ -1,6 +1,7 @@
 using Base.Test
 using IndexedTables
 using PooledArrays
+using NamedTuples
 
 let a = Columns([1,2,1],["foo","bar","baz"]),
     b = Columns([2,1,1],["bar","baz","foo"]),
@@ -23,11 +24,26 @@ let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
     f = Columns([1,1,1], sort([rand(),0.5,rand()]))
     @test merge(IndexedTable(c,ones(5)),IndexedTable(d,ones(5))).index == Columns([1,1,1,1,2,2,2,2],[1,2,3,4,1,3,4,5])
     @test eltype(merge(IndexedTable(c,Columns(ones(Int, 5))),IndexedTable(d,Columns(ones(Float64, 5)))).data) == Tuple{Float64}
-    @test eltype(merge(IndexedTable(c,Columns(x=ones(Int, 5))),IndexedTable(d,Columns(x=ones(Float64, 5)))).data) == NamedTuples.@NT(x){Float64}
+    @test eltype(merge(IndexedTable(c,Columns(x=ones(Int, 5))),IndexedTable(d,Columns(x=ones(Float64, 5)))).data) == @NT(x){Float64}
     @test length(merge(IndexedTable(e,ones(3)),IndexedTable(f,ones(3)))) == 5
     @test vcat(Columns(x=[1]), Columns(x=[1.0])) == Columns(x=[1,1.0])
     @test vcat(Columns(x=PooledArray(["x"])), Columns(x=["y"])) == Columns(x=["x", "y"])
+
     @test summary(c) == "Columns{Tuple{Int64,Int64}}"
+end
+
+let
+    x = Columns([1], [2.0])
+    @test map(pick(2), x) == [2.0]
+    @test map(@pick(2), x) == Columns([2.0])
+    @test map(@pick(2,1), x) == Columns([2.0], [1])
+
+    y = Columns(x=[1], y=[2.0])
+    @test map(pick(2), y) == [2.0]
+    @test map(@pick(2), y) == Columns([2.0])
+    @test map(@pick(y), y) == Columns(y=[2.0])
+    @test map(@pick(2,1), y) == Columns([2.0], [1])
+    @test map(@pick(y,x), y) == Columns(y=[2.0], x=[1])
 end
 
 let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
