@@ -98,7 +98,10 @@ macro pick(ex...)
     tup = if all([isa(x, Symbol) for x in ex])
         # Named tuple
         args = [:(getfield(x, $(Expr(:quote, f)))) for f in ex]
-        Expr(:macrocall, :(NamedTuples.$(Symbol("@NT"))), map((x,y) -> :($x=$y), map(esc, ex), args)...)
+        T = Expr(:macrocall,
+                 :(NamedTuples.$(Symbol("@NT"))),
+                   map((x) -> :($(esc(x))), ex)...)
+        :($T($(args...)))
     else
         :(($([:(getfield(x, $f)) for f in ex]...),))
     end
