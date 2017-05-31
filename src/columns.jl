@@ -44,7 +44,7 @@ size(c::Columns) = (length(c),)
 summary{D<:Tuple}(c::Columns{D}) = "Columns{$D}"
 
 empty!(c::Columns) = (foreach(empty!, c.columns); c)
-similar{D,C}(c::Columns{D,C}) = empty!(Columns{D,C}(map(similar, c.columns)))
+similar{D,C}(c::Columns{D,C}) = Columns{D,C}(map(similar, c.columns))
 similar{D,C}(c::Columns{D,C}, n::Integer) = Columns{D,C}(map(a->similar(a,n), c.columns))
 copy{D,C}(c::Columns{D,C}) = Columns{D,C}(map(copy, c.columns))
 
@@ -137,7 +137,6 @@ function Base.vcat(c::Columns, cs::Columns...)
             throw(ArgumentError("Cannot concatenate columns with fields $errfields"))
         end
     end
-    names = all(isa.(f1, Symbol)) ? f1 : nothing
     Columns(map(vcat, map(x->x.columns, (c,cs...))...))
 end
 

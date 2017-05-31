@@ -15,6 +15,7 @@ let a = Columns([1,2,1],["foo","bar","baz"]),
     @test a == b == c
     @test size(a) == size(b) == size(c) == (3,)
     @test eltype(a) == Tuple{Int,String}
+    @test length(similar(a)) == 3
 end
 
 let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
