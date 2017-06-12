@@ -138,6 +138,10 @@ let a = IndexedTable([1,2,2,2], [1,2,3,4], [10,9,8,7])
     #@test_throws ErrorException a[2]
     @test a[2,:] == IndexedTable([2,2,2], [2,3,4], [9,8,7])
     @test a[:,1] == IndexedTable([1], [1], [10])
+    @test a[:,:] == a
+    @test a[2..2,2..3] == IndexedTable([2,2], [2,3], [9,8])
+    @test a[2,2..3] == IndexedTable([2,2], [2,3], [9,8])
+    @test a[2..2,:] == IndexedTable([2,2,2], [2,3,4], [9,8,7])
     @test collect(where(a, 2, :)) == [9,8,7]
     @test collect(pairs(a)) == [(1,1)=>10, (2,2)=>9, (2,3)=>8, (2,4)=>7]
     @test first(pairs(a, :, 3)) == ((2,3)=>8)
