@@ -1,5 +1,6 @@
 using Base.Test
 using IndexedTables
+using PooledArrays
 
 let a = IndexedTable([12,21,32], [52,41,34], [11,53,150]), b = IndexedTable([12,23,32], [52,43,34], [56,13,10])
     c = naturaljoin(a, b, +)
@@ -89,9 +90,9 @@ end
 
 let
     # scalar
-    x=IndexedTable(Columns(a=[1,1,1,2,2],b=[1,2,3,1,2]),[1,2,3,4,5])
+    x=IndexedTable(Columns(a=[1,1,1,2,2],b=PooledArray(["a","b","c","a","b"])),[1,2,3,4,5])
     t = mapslices(y->sum(y), x, (1,))
-    @test t == IndexedTable(Columns(b=[1,2,3]), [5,7,3])
+    @test t == IndexedTable(Columns(b=["a","b","c"]), [5,7,3])
 
     # scalar
     r = Ref(0)
@@ -100,7 +101,7 @@ let
         n = length(slice)
         IndexedTable(Columns(c=[1:n;]), [r[] for i=1:n])
     end
-    @test t == IndexedTable(Columns(b=[1,1,2,2,3], c=[1,2,1,2,1]), [1,1,2,2,3])
+    @test t == IndexedTable(Columns(b=["a","a","b","b","c"], c=[1,2,1,2,1]), [1,1,2,2,3])
 
     # dedup names
     x=IndexedTable(Columns(a=[1],b=[1]),Columns(c=[1]))
