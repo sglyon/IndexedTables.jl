@@ -361,6 +361,9 @@ function _mapslices_scalar!(f, output, x, iter, iterdims, start, coerce)
             d = iterdims[j]
             idx[d] = iter[i][j]
         end
+        if length(idx) == length(iterdims)
+            idx[end] = vcat(idx[end])
+        end
         y = f(x[idx...])
         push!(output.index, iter[i])
         push!(output.data, coerce(y))
@@ -384,6 +387,9 @@ function _mapslices_itable!(f, output, x, iter, iterdims, start)
         for j in 1:length(iterdims)
             d = iterdims[j]
             idx[d] = iter[i][j]
+        end
+        if length(idx) == length(iterdims)
+            idx[end] = vcat(idx[end])
         end
         y = f(x[idx...])
         n = length(y)
