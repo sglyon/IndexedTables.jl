@@ -196,7 +196,7 @@ map(f, x::IndexedTable) = IndexedTable(copy(x.index), map(f, x.data), presorted=
 
 # lift projection on arrays of structs
 map{T,D<:Tuple,C<:Tup,V<:Columns}(p::Proj, x::IndexedTable{T,D,C,V}) =
-    IndexedTable(x.index, p(x.data), presorted=true)
+    IndexedTable(x.index, p(x.data.columns), presorted=true)
 
 (p::Proj)(x::IndexedTable) = map(p, x)
 
