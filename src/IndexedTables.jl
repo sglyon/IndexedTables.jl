@@ -9,7 +9,7 @@ import Base:
     permutedims, reducedim, serialize, deserialize
 
 export IndexedTable, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column,
-    update!, aggregate, reducedim_vec, dimlabels, withkeys, withvalues
+    update!, aggregate, reducedim_vec, dimlabels, withkeys, withvalues, as
 
 const Tup = Union{Tuple,NamedTuple}
 const DimName = Union{Int,Symbol}
