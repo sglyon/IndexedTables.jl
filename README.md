@@ -3,7 +3,7 @@
 [![codecov.io](http://codecov.io/github/JuliaComputing/IndexedTables.jl/coverage.svg?branch=master)](http://codecov.io/github/JuliaComputing/IndexedTables.jl?branch=master)
 
 # IndexedTables.jl
-This package provides a table data structure where some of the columns form a sorted index.
+This package provides a tablular data structure where some of the columns form a sorted index.
 This structure is equivalent to an N-dimensional sparse array, and follows the array API
 to the extent possible.
 
@@ -51,43 +51,6 @@ order than we initially provided.
 On construction, `Table` takes ownership of the columns and sorts them in place
 (the original vectors are modified).
 
-## Importing data
-
-Importing data from column-based sources is straightforward.
-For example, csv files can be imported using CSV.jl with the following snippet:
-
-    Table(CSV.read(filename).columns...)
-
-Of course, this assumes the file already has the "data column" in the rightmost
-position.
-If not, the columns can be reordered first.
-
-## Indexing
-
-Most lookup and filtering operations on `Table` are done via indexing.
-Our `hitemps` array behaves like a 2-d array of integers, accepting two
-indices:
-
-    julia> hitemps["Boston", Date(2016,7,8)]
-    76
-
-If the given indices exactly match the element types of the index columns,
-then the result is a scalar.
-In other cases, a new `Table` is returned, giving data for all matching
-locations:
-
-    julia> hitemps["Boston", :]
-    ─────────────────────┬───
-    "Boston"  2016-07-06 │ 95
-    "Boston"  2016-07-07 │ 83
-    "Boston"  2016-07-08 │ 76
-
-Like other arrays, `Table` generates its data values when iterated.
-This allows the usual reduction functions (among others) in Base to work:
-
-    julia> maximum(hitemps["Boston", :])
-    95
-
 ## Permuting dimensions
 
 As with other multi-dimensional arrays, dimensions can be permuted to change
@@ -109,6 +72,45 @@ Now the data is sorted first by date.
 In some cases such dimension permutations are needed for performance.
 The leftmost column is esssentially the primary key --- indexing is fastest
 in this dimension.
+
+## Importing data
+
+Importing data from column-based sources is straightforward.
+For example, csv files can be imported this way:
+
+    julia> using IndexedTables, IndexedTables.Table
+    julia> using CSV
+    julia> table = Table(CSV.read(filename).columns...)
+
+Of course, this assumes the file already has the "data column" in the rightmost
+position.
+If not, first reorder the columns.
+
+## Indexing
+
+Most lookup and filtering operations on an `IndexedTable` are done via indexing.
+Our `hitemps` array behaves like a 2-d array of integers, accepting two
+indices:
+
+    julia> hitemps["Boston", Date(2016,7,8)]
+    76
+
+If the given indices exactly match the element types of the index columns,
+then the result is a scalar.
+In other cases, a new `IndexedTable` is returned, giving data for all matching
+locations:
+
+    julia> hitemps["Boston", :]
+    ─────────────────────┬───
+    "Boston"  2016-07-06 │ 95
+    "Boston"  2016-07-07 │ 83
+    "Boston"  2016-07-08 │ 76
+
+As with other array types, `IndexedTable` generates its data values when iterated.
+This allows the usual reduction functions in Base (and some others) to work:
+
+    julia> maximum(hitemps["Boston", :])
+    95
 
 ## Select and aggregate
 
@@ -141,8 +143,7 @@ The `Table` constructor also accepts the `agg` argument.
 The aggregation operation can also be done by itself, in-place, using the
 function `aggregate!`.
 
-`select` also supports filtering columns with arbitrary predicates, by
-passing `column=>predicate` pairs:
+Calling `select` with `column=>predicate` will apply that predicate to the column:
 
     julia> select(hitemps, 2=>isfriday)
     ───────────────────────┬───
@@ -228,7 +229,7 @@ The following call therefore gives monthly high temperatures:
 
 ## Assignment
 
-`Table` supports indexed assignment just like other arrays, but there are
+`IndexedTable` supports indexed assignment just like other arrays, but there are
 caveats.
 Since data is stored in a compact, sorted representation, inserting a single
 element is potentially very inefficient (`O(n)`, since it requires moving up to half
@@ -248,10 +249,10 @@ rarely.
 
 ## Named columns
 
-`Table` is built on a simpler data structure called `Columns` that groups
+An `IndexedTable` is built on a simpler data structure called `Columns` that groups
 a set of vectors together.
-This structure is used to store the index part of an `Table`, and an
-`Table` can be constructed by passing one of these objects directly.
+This structure is used to store the index part of an `IndexedTable`, and an
+`IndexedTable` can be constructed by passing one of these objects directly.
 `Columns` allows names to be associated with its constituent vectors.
 Together, these features allow `Table` arrays with named dimensions:
 
