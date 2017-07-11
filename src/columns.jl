@@ -74,7 +74,7 @@ _sizehint!(c::Columns, n::Integer) = (foreach(c->_sizehint!(c,n), c.columns); c)
 function ==(x::Columns, y::Columns)
     nc = length(x.columns)
     length(y.columns) == nc || return false
-    fieldnames(x.columns) == fieldnames(y.columns) || return false
+    fieldnames(eltype(x)) == fieldnames(eltype(y)) || return false
     n = length(x)
     length(y) == n || return false
     for i in 1:nc
