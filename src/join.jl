@@ -425,11 +425,11 @@ names and types.
 """
 function broadcast(f::Function, A::IndexedTable, B::IndexedTable; dimmap=nothing)
     out_T = Base.promote_op(f, eltype(A), eltype(B))
-    out = IndexedTable(similar(typeof(A.index), 0), similar(arrayof(out_T), 0))
-
     if ndims(B) > ndims(A)
+        out = IndexedTable(similar(B.index, 0), similar(arrayof(out_T), 0))
         _broadcast!((x,y)->f(y,x), out, B, A, dimmap=dimmap)
     else
+        out = IndexedTable(similar(A.index, 0), similar(arrayof(out_T), 0))
         _broadcast!(f, out, A, B, dimmap=dimmap)
     end
 end

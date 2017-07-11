@@ -271,8 +271,10 @@ Returns the type of `Columns` or `Vector` suitable to store
 values of type T. Nested tuples beget nested Columns.
 """
 Base.@pure function arrayof(T)
-    if T<:Tup
+    if T<:Tuple
         Columns{T, Tuple{map(arrayof, T.parameters)...}}
+    elseif T<:NamedTuple
+        Columns{T,eval(:(@NT($(fieldnames(T)...)))){map(arrayof, T.parameters)...}}
     else
         Vector{T}
     end
