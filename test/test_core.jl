@@ -33,6 +33,32 @@ let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
 end
 
 let
+    t = IndexedTable([1,2,3], Columns(x=[4,5,6]))
+    @test isa(map(x->x.x, t).data, Vector)
+    @test map(x->x.x, t).data == [4,5,6]
+
+    t1 = map(x->@NT(x=x.x,y=x.x^2), t)
+    @test isa(t1.data, Columns)
+    @test fieldnames(eltype(t1.data)) == [:x,:y]
+
+    t2 = map(x->(x.x,x.x^2), t)
+    @test isa(t2.data, Columns)
+    @test isa(t2.data.columns, Tuple{Vector{Int}, Vector{Int}})
+
+    t3 = map(x->ntuple(identity, x.x), t)
+    @test isa(t3.data, Vector)
+    @test eltype(t3.data) <: Tuple{Vararg{Int}}
+
+    y = [1, 1//2, "x"]
+    function f(x)
+        tuple(x.x, y[x.x-3])
+    end
+    t4 = map(f, t)
+    @test isa(t4.data, Columns)
+    @test eltype(t4.data) <: Tuple{Int, Any}
+end
+
+let
     t = IndexedTable([1], Columns([1]))
     @test map(pick(1), t).data == [1]
 
@@ -100,6 +126,29 @@ let S = spdiagm(1:5)
 
     nd[1:5,1:5] = 2
     @test nd == convert(IndexedTable, spdiagm(fill(2, 5)))
+end
+
+let
+    idx = Columns(p=[1,2], q=[3,4])
+    t = IndexedTable(idx, Columns(a=[5,6],b=[7,8]))
+    t1 = IndexedTable(Columns(p=[1,2,3]), Columns(c=[4,5,6]))
+    t2 = IndexedTable(Columns(q=[2,3]), Columns(c=[4,5]))
+
+    # scalar output
+    @test broadcast(==, t, t) == IndexedTable(idx, Bool[1,1])
+    @test broadcast((x,y)->x.a+y.c, t, t1) == IndexedTable(idx, [9,11])
+    @test broadcast((x,y)->y.a+x.c, t1, t) == IndexedTable(idx, [9,11])
+    @test broadcast((x,y)->x.a+y.c, t, t2) == IndexedTable(idx[1:1], [10])
+
+    # Tuple output
+    b1 = broadcast((x,y)->(x.a, y.c), t, t1)
+    @test isa(b1.data, Columns)
+    @test b1 == IndexedTable(idx, Columns([5,6], [4,5]))
+
+    b2 = broadcast((x,y)->@NT(m=x.a, n=y.c), t, t1)
+    @test b2 == IndexedTable(idx, Columns(m=[5,6], n=[4,5]))
+    @test isa(b2.data, Columns)
+    @test fieldnames(eltype(b2.data)) == [:m, :n]
 end
 
 let S = sprand(10,10,.1), v = rand(10)

@@ -263,3 +263,60 @@ function append_n!(X, val, n)
     end
     X
 end
+
+"""
+`arrayof(T)`
+
+Returns the type of `Columns` or `Vector` suitable to store
+values of type T. Nested tuples beget nested Columns.
+"""
+Base.@pure function arrayof(S)
+    T = strip_unionall(S)
+    if T<:Tuple
+        Columns{T, Tuple{map(arrayof, T.parameters)...}}
+    elseif T<:NamedTuple
+        Columns{T,eval(:(@NT($(fieldnames(T)...)))){map(arrayof, T.parameters)...}}
+    else
+        Vector{T}
+    end
+end
+
+@inline strip_unionall_params(T::UnionAll) = strip_unionall_params(T.body)
+@inline strip_unionall_params(T) = map(strip_unionall, T.parameters)
+
+Base.@pure function strip_unionall(T)
+    if isleaftype(T)
+        return T
+    elseif T<:Tuple
+        if any(x->x <: Vararg, T.parameters)
+            # we only keep known-length tuples
+            return Any
+        else
+            return Tuple{strip_unionall_params(T)...}
+        end
+    elseif T<:NamedTuple
+        if isa(T, Union)
+            return Any
+        else
+            NT = eval(:(@NT($(fieldnames(T)...))))
+            return NT{strip_unionall_params(T)...}
+        end
+    elseif isa(T, UnionAll)
+        return Any
+    elseif isa(T, Union) || T.abstract
+        return T
+    else
+        return Any
+    end
+end
+
+@inline function _promote_op{S}(f, ::Type{S})
+    t = Core.Inference.return_type(f, Tuple{Base._default_type(S)})
+    strip_unionall(t)
+end
+
+@inline function _promote_op{S,T}(f, ::Type{S}, ::Type{T})
+    t = Core.Inference.return_type(f, Tuple{Base._default_type(S),
+                                        Base._default_type(T)})
+    strip_unionall(t)
+end
