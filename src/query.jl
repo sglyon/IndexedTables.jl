@@ -107,7 +107,7 @@ name.  Optionally, you can pass a function to apply to the column vector as the 
 `as`. I.e. `as(f, :src_col, :dest_col)` will apply `f` on the `:src_col` column of `t`.
 `f` must return another vector as the same length as the input.
 """
-function select(t::IndexedTable, kvcols::Pair{<:Tuple, <:Any})
+function select{T<:Tuple}(t::IndexedTable, kvcols::Pair{T})
     ks, vs = kvcols
     IndexedTable(select(t, ks), select(t, vs))
 end
