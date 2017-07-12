@@ -111,6 +111,7 @@ let
     # scalar output
     @test broadcast(==, t, t) == IndexedTable(idx, Bool[1,1])
     @test broadcast((x,y)->x.a+y.c, t, t1) == IndexedTable(idx, [9,11])
+    @test broadcast((x,y)->y.a+x.c, t1, t) == IndexedTable(idx, [9,11])
     @test broadcast((x,y)->x.a+y.c, t, t2) == IndexedTable(idx[1:1], [10])
 
     # Tuple output
