@@ -192,7 +192,20 @@ end
 
 # map and convert
 
-map(f, x::IndexedTable) = IndexedTable(copy(x.index), map(f, x.data), presorted=true)
+function _map(f, xs)
+    T = _promote_op(f, eltype(xs))
+    if T<:Tup
+        out_T = arrayof(T)
+        out = similar(out_T, length(xs))
+        map!(f, out, xs)
+    else
+        map(f, xs)
+    end
+end
+
+function map(f, x::IndexedTable)
+    IndexedTable(copy(x.index), _map(f, x.data), presorted=true)
+end
 
 # lift projection on arrays of structs
 map{T,D<:Tuple,C<:Tup,V<:Columns}(p::Proj, x::IndexedTable{T,D,C,V}) =
