@@ -306,17 +306,22 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
     iterdims = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
     idx = Any[Colon() for v in x.index.columns]
 
-    iter = sort(Columns(astuple(x.index.columns)[[iterdims...]]))
+    iter = Columns(astuple(x.index.columns)[[iterdims...]])
+    if !isempty(dims) || !issorted(iter)
+        iter = sort(iter)
+    end
 
     for j in 1:length(iterdims)
         d = iterdims[j]
         idx[d] = iter[1][j]
     end
-    if length(idx) == length(iterdims)
-        idx[end] = vcat(idx[end]) # make last element a vector
-                                  # so that we don't do scalar indexing
+    T = eltypes(typeof(x.index.columns))
+    wrap = T<:Tuple ? tuple : T
+    if isempty(dims)
+        y = f(first(x.index) => first(x.data))
+    else
+        y = f(x[idx...]) # Apply on first slice
     end
-    y = f(x[idx...]) # Apply on first slice
 
     if isa(y, IndexedTable)
         # this means we need to concatenate outputs into a big IndexedTable
@@ -334,7 +339,11 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
         index = Columns(index_first.columns..., astuple(y.index.columns)...; names=ns)
         data = copy(y.data)
         output = IndexedTable(index, data)
-        _mapslices_itable!(f, output, x, iter, iterdims, 2)
+        if isempty(dims)
+            _mapslices_itable_singleton!(f, output, x, 2)
+        else
+            _mapslices_itable!(f, output, x, iter, iterdims, 2)
+        end
     else
         ns = dimlabels(x)[iterdims]
         if !all(x->isa(x, Symbol), ns)
@@ -371,6 +380,25 @@ function _mapslices_scalar!(f, output, x, iter, iterdims, start, coerce)
     output
 end
 
+function _mapslices_itable_singleton!(f, output, x, start)
+    I = output.index
+    D = output.data
+
+    I1 = Columns(I.columns[1:ndims(x)])
+    I2 = Columns(I.columns[ndims(x)+1:end])
+    i = 1
+    for (k, v) in zip(x.index[start:end], x.data[start:end])
+        i+=1
+        y = f(k=>v)
+        n = length(y)
+
+        foreach((x,y)->append_n!(x,y,n), I1.columns, k)
+        append!(I2, y.index)
+        append!(D, y.data)
+    end
+    IndexedTable(I,D)
+end
+
 function _mapslices_itable!(f, output, x, iter, iterdims, start)
     idx = Any[Colon() for v in x.index.columns]
     I = output.index
@@ -388,10 +416,8 @@ function _mapslices_itable!(f, output, x, iter, iterdims, start)
             d = iterdims[j]
             idx[d] = iter[i][j]
         end
-        if length(idx) == length(iterdims)
-            idx[end] = vcat(idx[end])
-        end
-        y = f(x[idx...])
+        subtable = x[idx...]
+        y = f(subtable)
         n = length(y)
 
         foreach((x,y)->append_n!(x,y,n), I1.columns, iter[i])
