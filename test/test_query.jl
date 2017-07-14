@@ -114,6 +114,7 @@ let
     # signleton slices
     x=IndexedTable(Columns(a=[1,2,3,4]),Columns(b=[1,2,3,4]))
     t = mapslices(x,()) do slice
+            @test typeof(slice) == Pair{@NT(a::Int), @NT(b::Int)}
             IndexedTable(Columns(z=[7]),
                          Columns(y=[1]))
     end
