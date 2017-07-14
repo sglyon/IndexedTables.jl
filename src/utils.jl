@@ -7,6 +7,8 @@ export @pick, pick
 eltypes(::Type{Tuple{}}) = Tuple{}
 eltypes{T<:Tuple}(::Type{T}) =
     tuple_type_cons(eltype(tuple_type_head(T)), eltypes(tuple_type_tail(T)))
+eltypes{T<:NamedTuple}(::Type{T}) = map_params(eltype, T)
+Base.@pure astuple{T<:NamedTuple}(::Type{T}) = Tuple{T.parameters...}
 
 # sizehint, making sure to return first argument
 _sizehint!{T}(a::Array{T,1}, n::Integer) = (sizehint!(a, n); a)
@@ -319,4 +321,40 @@ end
     t = Core.Inference.return_type(f, Tuple{Base._default_type(S),
                                         Base._default_type(T)})
     strip_unionall(t)
+end
+
+# The following is not inferable, this is OK because the only place we use
+# this doesn't need it.
+
+function _map_params(f, T, S)
+    (f(_tuple_type_head(T), _tuple_type_head(S)), _map_params(f, _tuple_type_tail(T), _tuple_type_tail(S))...)
+end
+
+_map_params(f, T::Type{Tuple{}},S::Type{Tuple{}}) = ()
+
+map_params{T,S}(f, ::Type{T}, ::Type{S}) = f(T,S)
+map_params{T}(f, ::Type{T}) = map_params((x,y)->f(x), T, T)
+@inline _tuple_type_head{T<:Tuple}(::Type{T}) = Base.tuple_type_head(T)
+@inline _tuple_type_tail{T<:Tuple}(::Type{T}) = Base.tuple_type_tail(T)
+
+#function map_params{N}(f, T::Type{T} where T<:Tuple{Vararg{Any,N}}, S::Type{S} where S<: Tuple{Vararg{Any,N}})
+Base.@pure function map_params{T<:Tuple,S<:Tuple}(f, ::Type{T}, ::Type{S})
+    if nfields(T) != nfields(S)
+        MethodError(map_params, (typeof(f), T,S))
+    end
+    Tuple{_map_params(f, T,S)...}
+end
+
+_tuple_type_head{NT<: NamedTuple}(T::Type{NT}) = fieldtype(NT, 1)
+
+Base.@pure function _tuple_type_tail{NT<: NamedTuple}(T::Type{NT})
+    Tuple{Base.argtail(NT.parameters...)...}
+end
+
+Base.@pure @generated function map_params{T<:NamedTuple,S<:NamedTuple}(f, ::Type{T}, ::Type{S})
+    if fieldnames(T) != fieldnames(S)
+        MethodError(map_params, (T,S))
+    end
+    NT = Expr(:macrocall, :(NamedTuples.$(Symbol("@NT"))), fieldnames(T)...)
+    :($NT{_map_params(f, T, S)...})
 end
