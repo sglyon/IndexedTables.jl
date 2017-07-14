@@ -46,7 +46,7 @@ function IndexedTable{T,D,C}(I::Columns{D,C}, d::AbstractVector{T}; agg=nothing,
     # ensure index is a `Columns` that generates tuples
     dt = D
     if eltype(I) <: NamedTuple
-        dt = eltypes(typeof((I.columns...,)))
+        dt = astuple(eltype(I))
         I = Columns{dt,C}(I.columns)
     end
     if !presorted && !issorted(I)
