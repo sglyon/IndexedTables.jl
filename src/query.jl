@@ -318,7 +318,7 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
     T = eltypes(typeof(x.index.columns))
     wrap = T<:Tuple ? tuple : T
     if isempty(dims)
-        y = f(first(x.index) => first(x.data))
+        y = f(T(first(x.index)...) => first(x.data))
     else
         y = f(x[idx...]) # Apply on first slice
     end
@@ -340,7 +340,7 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
         data = copy(y.data)
         output = IndexedTable(index, data)
         if isempty(dims)
-            _mapslices_itable_singleton!(f, output, x, 2)
+            _mapslices_itable_singleton!(f, output, x, wrap, 2)
         else
             _mapslices_itable!(f, output, x, iter, iterdims, 2)
         end
@@ -355,7 +355,11 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
         else
             output = IndexedTable(index, Columns([y], names=[name]))
         end
-        _mapslices_scalar!(f, output, x, iter, iterdims, 2, name!==nothing ? x->(x,) : identity)
+        if isempty(dims)
+            error("calling mapslices with no dimensions and scalar return value -- use map instead")
+        else
+            _mapslices_scalar!(f, output, x, iter, iterdims, 2, name!==nothing ? x->(x,) : identity)
+        end
     end
 end
 
@@ -380,7 +384,7 @@ function _mapslices_scalar!(f, output, x, iter, iterdims, start, coerce)
     output
 end
 
-function _mapslices_itable_singleton!(f, output, x, start)
+function _mapslices_itable_singleton!(f, output, x, wrap, start)
     I = output.index
     D = output.data
 
@@ -389,7 +393,7 @@ function _mapslices_itable_singleton!(f, output, x, start)
     i = 1
     for (k, v) in zip(x.index[start:end], x.data[start:end])
         i+=1
-        y = f(k=>v)
+        y = f(wrap(k...)=>v)
         n = length(y)
 
         foreach((x,y)->append_n!(x,y,n), I1.columns, k)

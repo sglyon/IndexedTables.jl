@@ -115,8 +115,15 @@ let
     x=IndexedTable(Columns(a=[1,2,3,4]),Columns(b=[1,2,3,4]))
     t = mapslices(x,()) do slice
             @test typeof(slice) == Pair{@NT(a::Int), @NT(b::Int)}
-            IndexedTable(Columns(z=[7]),
-                         Columns(y=[1]))
+            IndexedTable(Columns(z=[7]), Columns(y=[1]))
     end
-    @test t == IndexedTable(Columns(a=[1,2,3,4], z=[7,7,7,7]), Columns(y=[1,1,1,1]))
+    x=IndexedTable(Columns([1,2]),Columns([1,2]))
+    @test_throws ErrorException mapslices(x,()) do slice
+        true
+    end
+    t = mapslices(x,()) do slice
+        @test typeof(slice) == Pair{Tuple{Int}, Tuple{Int}}
+        IndexedTable(Columns([1]), ([1]))
+    end
+    @test t == IndexedTable(Columns([1,2], [1,1]), [1,1])
 end
