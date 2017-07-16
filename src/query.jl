@@ -302,8 +302,10 @@ function dedup_names(ns)
     [haskey(repeated, n) ? Symbol(n, "_", repeated[n]+=1) : n for n in ns]
 end
 
-function mapslices(f, x::IndexedTable, dims; name = nothing)
+function mapslices{a,b,c}(f, x::IndexedTable{a,b,c}, dims; name = nothing)
     iterdims = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
+
+    T = eltypes(c)
 
     if isempty(iterdims)
         return f(x)
@@ -320,10 +322,9 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
         d = iterdims[j]
         idx[d] = iter[1][j]
     end
-    T = eltypes(typeof(x.index.columns))
-    wrap = T<:Tuple ? tuple : T
+    wrap = T<:Tuple ? identity : x->T(x...)
     if isempty(dims)
-        y = f(wrap(first(x.index)...) => first(x.data))
+        y = f(wrap(first(x.index)) => first(x.data))
     else
         y = f(x[idx...]) # Apply on first slice
     end
@@ -395,17 +396,27 @@ function _mapslices_itable_singleton!(f, output, x, wrap, start)
 
     I1 = Columns(I.columns[1:ndims(x)])
     I2 = Columns(I.columns[ndims(x)+1:end])
-    i = 1
-    for (k, v) in zip(x.index[start:end], x.data[start:end])
-        i+=1
-        y = f(wrap(k...)=>v)
+     _foo!(f, I1,I2,D,x,wrap,start)
+    IndexedTable(I,D)
+end
+
+function _foo!(f, I1, I2,D, x, wrap, start)
+    l = length(x)
+    @show wrap
+    for i in start:l
+        _k = x.index[i]
+        @code_warntype wrap(_k)
+        k = wrap(_k)
+        v = x.data[i]
+        y = f(k=>v)
         n = length(y)
 
-        foreach((x,y)->append_n!(x,y,n), I1.columns, k)
+        let n=n
+            foreach((a,b)->append_n!(a,b,n), I1.columns, k)
+        end
         append!(I2, y.index)
         append!(D, y.data)
     end
-    IndexedTable(I,D)
 end
 
 function _mapslices_itable!(f, output, x, iter, iterdims, start)
