@@ -304,6 +304,11 @@ end
 
 function mapslices(f, x::IndexedTable, dims; name = nothing)
     iterdims = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
+
+    if isempty(iterdims)
+        return f(x)
+    end
+
     idx = Any[Colon() for v in x.index.columns]
 
     iter = Columns(astuple(x.index.columns)[[iterdims...]])
@@ -318,7 +323,7 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
     T = eltypes(typeof(x.index.columns))
     wrap = T<:Tuple ? tuple : T
     if isempty(dims)
-        y = f(T(first(x.index)...) => first(x.data))
+        y = f(wrap(first(x.index)...) => first(x.data))
     else
         y = f(x[idx...]) # Apply on first slice
     end
