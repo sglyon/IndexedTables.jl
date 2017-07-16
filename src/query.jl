@@ -320,13 +320,16 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
         d = iterdims[j]
         idx[d] = iter[1][j]
     end
+        if length(idx) == length(iterdims)
+            idx[end] = vcat(idx[end])
+        end
     T = eltypes(typeof(x.index.columns))
     wrap = T<:Tuple ? tuple : T
-    if isempty(dims)
-        y = f(wrap(first(x.index)...) => first(x.data))
-    else
+   #if isempty(dims)
+   #    y = f(wrap(first(x.index)...) => first(x.data))
+   #else
         y = f(x[idx...]) # Apply on first slice
-    end
+   #end
 
     if isa(y, IndexedTable)
         # this means we need to concatenate outputs into a big IndexedTable
@@ -344,11 +347,11 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
         index = Columns(index_first.columns..., astuple(y.index.columns)...; names=ns)
         data = copy(y.data)
         output = IndexedTable(index, data)
-        if isempty(dims)
-            _mapslices_itable_singleton!(f, output, x, wrap, 2)
-        else
+       #if isempty(dims)
+       #    _mapslices_itable_singleton!(f, output, x, wrap, 2)
+       #else
             _mapslices_itable!(f, output, x, iter, iterdims, 2)
-        end
+       #end
     else
         ns = dimlabels(x)[iterdims]
         if !all(x->isa(x, Symbol), ns)
@@ -424,6 +427,9 @@ function _mapslices_itable!(f, output, x, iter, iterdims, start)
         for j in 1:length(iterdims)
             d = iterdims[j]
             idx[d] = iter[i][j]
+        end
+        if length(idx) == length(iterdims)
+            idx[end] = vcat(idx[end])
         end
         subtable = x[idx...]
         y = f(subtable)
