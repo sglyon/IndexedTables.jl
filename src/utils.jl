@@ -9,6 +9,7 @@ eltypes{T<:Tuple}(::Type{T}) =
     tuple_type_cons(eltype(tuple_type_head(T)), eltypes(tuple_type_tail(T)))
 eltypes{T<:NamedTuple}(::Type{T}) = map_params(eltype, T)
 Base.@pure astuple{T<:NamedTuple}(::Type{T}) = Tuple{T.parameters...}
+astuple{T<:Tuple}(::Type{T}) = T
 
 # sizehint, making sure to return first argument
 _sizehint!{T}(a::Array{T,1}, n::Integer) = (sizehint!(a, n); a)

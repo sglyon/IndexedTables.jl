@@ -17,11 +17,11 @@ const DimName = Union{Int,Symbol}
 include("utils.jl")
 include("columns.jl")
 
-immutable IndexedTable{T, D<:Tuple, C<:Tup, V<:AbstractVector}
-    index::Columns{D,C}
+immutable IndexedTable{T, D<:Tuple, C<:Columns, V<:AbstractVector}
+    index::C
     data::V
 
-    index_buffer::Columns{D,C}
+    index_buffer::C
     data_buffer::V
 end
 
@@ -41,14 +41,9 @@ Keyword arguments:
 * `presorted::Bool`: If true, the indices are assumed to already be sorted and no sorting is done.
 * `copy::Bool`: If true, the storage for the new array will not be shared with the passed indices and data. If false (the default), the passed arrays will be copied only if necessary for sorting. The only way to guarantee sharing of data is to pass `presorted=true`.
 """
-function IndexedTable{T,D,C}(I::Columns{D,C}, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false)
+function IndexedTable{T,C<:Columns}(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false)
     length(I) == length(d) || error("index and data must have the same number of elements")
-    # ensure index is a `Columns` that generates tuples
-    dt = D
-    if eltype(I) <: NamedTuple
-        dt = astuple(eltype(I))
-        I = Columns{dt,C}(I.columns)
-    end
+
     if !presorted && !issorted(I)
         p = sortperm(I)
         I = I[p]
@@ -62,7 +57,7 @@ function IndexedTable{T,D,C}(I::Columns{D,C}, d::AbstractVector{T}; agg=nothing,
             d = Base.copy(d)
         end
     end
-    nd = IndexedTable{T,dt,C,typeof(d)}(I, d, similar(I,0), similar(d,0))
+    nd = IndexedTable{T,astuple(eltype(C)),C,typeof(d)}(I, d, similar(I,0), similar(d,0))
     agg===nothing || aggregate!(agg, nd)
     return nd
 end
@@ -97,10 +92,14 @@ function empty!(t::IndexedTable)
     return t
 end
 
+_convert(::Type{<:Tuple}, tup::Tuple) = tup
+_convert{T<:NamedTuple}(::Type{T}, tup::Tuple) = T(tup...)
+convertkey{V,K,I}(t::IndexedTable{V,K,I}, tup::Tuple) = _convert(eltype(I), tup)
+
 ndims(t::IndexedTable) = length(t.index.columns)
 length(t::IndexedTable) = (flush!(t);length(t.index))
 eltype{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = T
-dimlabels{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = fieldnames(C)
+dimlabels{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = fieldnames(eltype(C))
 
 """
 `dimlabels(t::IndexedTable)`
