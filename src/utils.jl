@@ -267,6 +267,17 @@ function append_n!(X, val, n)
     X
 end
 
+const _namedtuple_cache = Dict{Tuple{Vararg{Symbol}}, Type}()
+function namedtuple(fields...)
+    if haskey(_namedtuple_cache, fields)
+        return _namedtuple_cache[fields]
+    else
+        NT = eval(:(@NT($(fields...))))
+        _namedtuple_cache[fields] = NT
+        return NT
+    end
+end
+
 """
 `arrayof(T)`
 
@@ -278,7 +289,7 @@ Base.@pure function arrayof(S)
     if T<:Tuple
         Columns{T, Tuple{map(arrayof, T.parameters)...}}
     elseif T<:NamedTuple
-        Columns{T,eval(:(@NT($(fieldnames(T)...)))){map(arrayof, T.parameters)...}}
+        Columns{T,namedtuple(fieldnames(T)...){map(arrayof, T.parameters)...}}
     else
         Vector{T}
     end
@@ -301,7 +312,7 @@ Base.@pure function strip_unionall(T)
         if isa(T, Union)
             return Any
         else
-            NT = eval(:(@NT($(fieldnames(T)...))))
+            NT = namedtuple(fieldnames(T)...)
             return NT{strip_unionall_params(T)...}
         end
     elseif isa(T, UnionAll)
@@ -359,3 +370,13 @@ Base.@pure @generated function map_params{T<:NamedTuple,S<:NamedTuple}(f, ::Type
     NT = Expr(:macrocall, :(NamedTuples.$(Symbol("@NT"))), fieldnames(T)...)
     :($NT{_map_params(f, T, S)...})
 end
+
+Base.@pure function concat_nt_type{
+           T<:NamedTuple,S<:NamedTuple}(::Type{T}, ::Type{S})
+    namedtuple(fieldnames(T)..., fieldnames(S)...)
+end
+
+function concat_tup(a::NamedTuple, b::NamedTuple)
+    concat_nt_type(typeof(a), typeof(b))(a..., b...)
+end
+concat_tup(a::Tup, b::Tup) = (a..., b...)

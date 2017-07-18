@@ -4,11 +4,11 @@ using Compat
 using NamedTuples, PooledArrays
 
 import Base:
-    show, eltype, length, getindex, setindex!, ndims, map, convert,
+    show, eltype, length, getindex, setindex!, ndims, map, convert, keys, values,
     ==, broadcast, empty!, copy, similar, sum, merge, merge!, mapslices,
     permutedims, reducedim, serialize, deserialize
 
-export IndexedTable, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column,
+export IndexedTable, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column, rows, as,
     update!, aggregate, reducedim_vec, dimlabels
 
 const Tup = Union{Tuple,NamedTuple}
@@ -100,6 +100,176 @@ ndims(t::IndexedTable) = length(t.index.columns)
 length(t::IndexedTable) = (flush!(t);length(t.index))
 eltype{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = T
 dimlabels{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = fieldnames(eltype(C))
+
+### Iteration API
+
+## Extracting a single column
+
+"""
+`column(c::Columns, which)`
+
+Returns the column with a given name (which::Symbol)
+or at the given index (which::Int).
+"""
+@inline function column(c::Columns, x::Union{Int, Symbol})
+    getfield(c.columns, x)
+end
+
+has_column(t::Columns, c::Int) = c <= nfields(columns(t))
+has_column(t::Columns, c::Symbol) = isa(columns(t), NamedTuple) ? haskey(columns(t), c) : false
+
+"""
+`column(t::IndexedTable, which)`
+
+Returns a single column from `t`. `which` can be:
+
+- `Symbol`: returns the column with the given name.
+  If the same name appears in keys and values,
+  the keys column is returned.
+- `Int`: returns the column with the given number.
+  Numbering begins from index columns and then continues
+  to value columns.
+"""
+function column(t::IndexedTable, n::Int)
+    if has_column(keys(t), n)
+        return column(keys(t), n)
+    end
+
+    n = n - length(keys(t).columns)
+    if isa(values(t), Columns) && has_column(values(t), n)
+        return column(values(t), n)
+    elseif n == 1
+        return values(t)
+    end
+
+    error("Couldn't find column numbered $n")
+end
+
+function column(t::IndexedTable, col::Symbol)
+    if has_column(keys(t), col)
+        return column(keys(t), col)
+    end
+
+    if has_column(values(t), col)
+        return column(values(t), col)
+    end
+
+    error("Couldn't find column named $n")
+end
+
+## Column-wise iteration:
+
+columns(v::AbstractVector) = (v,)
+columns(c::Columns) = c.columns
+
+"""
+`columns(t::IndexedTable)`
+
+Returns a tuple or named tuple of column vectors.
+It requires key and value columns to have unique names.
+"""
+columns(t::IndexedTable) = concat_tup(columns(keys(t)),
+                                      columns(values(t)))
+
+_name(x::Union{Int, Symbol}) = x
+function _output_tuple(which::Tuple)
+    names = map(_name, which)
+    if all(x->isa(x, Symbol), names)
+        return namedtuple(names...)
+    else
+        return tuple
+    end
+end
+
+"""
+`columns(t::IndexedTable, which...)`
+
+Returns a subset of columns identified by `which`
+as a tuple or named tuple of vectors.
+
+Use `as(src, dest)` as the argument to rename a column
+from `src` to `dest`. Optionally, you can specify a
+function `f` to apply to the column: `as(f, src, dest)`.
+"""
+function columns(c::Union{Columns, IndexedTable}, which...)
+    tupletype = _output_tuple(which)
+    tupletype((column(c, w) for w in which)...)
+end
+
+## Row-wise iteration
+
+"""
+`rows(t)`
+
+Returns an array of rows in the table `t`. Keys and values
+are merged into a contiguous tuple / named tuple.
+"""
+rows(x::AbstractVector) = x
+rows(cols::Tup) = Columns(cols)
+
+"""
+`rows(t, which...)`
+
+Returns an array of rows in a subset of columns in `t`
+identified by `which`.
+"""
+rows(t::IndexedTable, which...) = rows(columns(t, which...))
+rows(t::Columns, which...) = rows(columns(t, which...))
+
+## Row-wise iteration that acknowledges key-value nature
+
+"""
+`keys(t::IndexedTable)`
+
+Returns an array of the keys in `t` as tuples or named tuples.
+"""
+keys(t::IndexedTable) = t.index
+
+"""
+`keys(t, which...)`
+
+Returns a array of rows from a subset of columns
+in the index of `t`.
+"""
+keys(t::IndexedTable, which...) = rows(keys(t), which...)
+
+"""
+`values(t)`
+
+Returns an array of values stored `t`.
+"""
+values(t::IndexedTable) = t.data
+
+"""
+`values(t, which...)`
+
+Returns a array of rows from a subset of columns
+of the values in `t`.
+"""
+values(t::IndexedTable, which...) = rows(values(t), which...)
+
+"""
+`pairs(t)`
+
+Returns an array of key-value pairs in `t`
+"""
+pairs(t::IndexedTable) = Columns(keys(t), values(t))
+
+## As
+
+struct As{F}
+    f::F
+    src::Union{Int, Symbol}
+    dest::Union{Int, Symbol}
+end
+
+as(f, src, dest) = As(f, src, dest)
+as(src, dest) = as(identity, src, dest)
+
+_name(x::As) = x.dest
+function column(t::Union{IndexedTable, Columns}, a::As)
+    a.f(column(t, a.src))
+end
 
 """
 `dimlabels(t::IndexedTable)`
@@ -212,17 +382,17 @@ map{T,D<:Tuple,C<:Tup,V<:Columns}(p::Proj, x::IndexedTable{T,D,C,V}) =
 
 (p::Proj)(x::IndexedTable) = map(p, x)
 
-"""
-`columns(x::IndexedTable, names...)`
+# """
+# `columns(x::IndexedTable, names...)`
+#
+# Given an IndexedTable array with multiple data columns (its data vector is a `Columns` object), return a
+# new array with the specified subset of data columns. Data is shared with the original array.
+# """
+# columns(x::IndexedTable, which...) = IndexedTable(x.index, Columns(x.data.columns[[which...]]), presorted=true)
 
-Given an IndexedTable array with multiple data columns (its data vector is a `Columns` object), return a
-new array with the specified subset of data columns. Data is shared with the original array.
-"""
-columns(x::IndexedTable, which...) = IndexedTable(x.index, Columns(x.data.columns[[which...]]), presorted=true)
+#columns(x::IndexedTable, which) = IndexedTable(x.index, x.data.columns[which], presorted=true)
 
-columns(x::IndexedTable, which) = IndexedTable(x.index, x.data.columns[which], presorted=true)
-
-column(x::IndexedTable, which) = columns(x, which)
+#column(x::IndexedTable, which) = columns(x, which)
 
 # IndexedTable uses lex order, Base arrays use colex order, so we need to
 # reorder the data. transpose and permutedims are used for this.
