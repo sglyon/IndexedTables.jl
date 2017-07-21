@@ -26,6 +26,39 @@ let
     @inferred IndexedTable(Columns([1]), [1])
 end
 
+let
+    x = IndexedTable(Columns(a=[1,1], b=[1,2]), Columns(c=[3,4]))
+    y = IndexedTable(Columns(a=[1,1], b=[1,2]), [3,4])
+
+    @test column(x, :a) == [1,1]
+    @test column(x, :b) == [1,2]
+    @test column(x, :c) == [3,4]
+    @test column(x, 3) == [3,4]
+    @test column(y, 3) == [3,4]
+
+    @test columns(x, :a) == @NT(a=[1,1])
+    @test columns(x, :a,:c) == @NT(a=[1,1], c=[3,4])
+    @test columns(y, 1, 3) == ([1,1], [3,4])
+
+    @test rows(x) == [@NT(a=1,b=1,c=3), @NT(a=1,b=2,c=4)]
+    @test rows(x, :b) == [@NT(b=1), @NT(b=2)]
+    @test rows(x, :b, :c) == [@NT(b=1,c=3), @NT(b=2,c=4)]
+
+    @test keys(x) == [@NT(a=1,b=1), @NT(a=1,b=2)]
+    @test keys(x, :a) == [@NT(a=1), @NT(a=1)]
+    @test keys(x, :a, :b, 2) == [(1,1,1), (1,2,2)]
+
+    @test keys(x, :a, :b, 2) == [(1,1,1), (1,2,2)]
+    @test values(x) == [@NT(c=3), @NT(c=4)]
+    @test values(x,1) == [(3,),(4,)]
+    @test values(x,1,1) == [(3,3), (4,4)]
+    @test values(y) == [3, 4]
+    @test values(y,1) == [(3,),(4,)]
+
+    @test collect(pairs(x)) == [@NT(a=1,b=1)=>@NT(c=3), @NT(a=1,b=2)=>@NT(c=4)]
+    @test collect(pairs(y)) == [@NT(a=1,b=1)=>3, @NT(a=1,b=2)=>4]
+end
+
 let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
     d = Columns([1,1,2,2,2], [1,3,1,4,5]),
     e = Columns([1,1,1], sort([rand(),0.5,rand()])),

@@ -215,6 +215,12 @@ identified by `which`.
 """
 rows(t::IndexedTable, which...) = rows(columns(t, which...))
 rows(t::Columns, which...) = rows(columns(t, which...))
+function rows(t::AbstractVector, which...)
+    if all(x->x==1, which)
+        Columns(map(x->t, which))
+    else error("No column $(join(filter(x->x!=1, which), " "))")
+    end
+end
 
 ## Row-wise iteration that acknowledges key-value nature
 
@@ -236,7 +242,7 @@ keys(t::IndexedTable, which...) = rows(keys(t), which...)
 """
 `values(t)`
 
-Returns an array of values stored `t`.
+Returns an array of values stored in `t`.
 """
 values(t::IndexedTable) = t.data
 
@@ -247,13 +253,6 @@ Returns a array of rows from a subset of columns
 of the values in `t`.
 """
 values(t::IndexedTable, which...) = rows(values(t), which...)
-
-"""
-`pairs(t)`
-
-Returns an array of key-value pairs in `t`
-"""
-pairs(t::IndexedTable) = Columns(keys(t), values(t))
 
 ## As
 

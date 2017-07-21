@@ -100,7 +100,7 @@ function update!{N}(f::Union{Function,Type}, d::IndexedTable, idxs::Vararg{Any,N
     d
 end
 
-#pairs(d::IndexedTable) = (d.index[i]=>d.data[i] for i in 1:length(d))
+pairs(d::IndexedTable) = (d.index[i]=>d.data[i] for i in 1:length(d))
 
 """
 `pairs(arr::IndexedTable, indices...)`
