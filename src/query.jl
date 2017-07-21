@@ -335,7 +335,7 @@ function mapslices(f, x::IndexedTable, dims; name = nothing)
         for j=1:n
             @inbounds index_first[j] = iter[1]
         end
-        index = Columns(index_first.columns..., astuple(y.index.columns)...; names=ns)
+        index = Columns(index_first.columns..., astuple(copy(y.index).columns)...; names=ns)
         data = copy(y.data)
         output = IndexedTable(index, data)
         if isempty(dims)

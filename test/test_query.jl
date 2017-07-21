@@ -94,6 +94,13 @@ let
     t = mapslices(y->sum(y), x, (1,))
     @test t == IndexedTable(Columns(b=["a","b","c"]), [5,7,3])
 
+    A = [1]
+    # shouldn't mutate input
+    mapslices(x, [:a]) do slice
+        IndexedTable(Columns(A), A)
+    end
+    @test A == [1]
+
     # scalar
     r = Ref(0)
     t = mapslices(x, [:a]) do slice
