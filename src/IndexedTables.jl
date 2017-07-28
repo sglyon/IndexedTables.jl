@@ -122,6 +122,14 @@ or at the given index (which::Int).
     getfield(c.columns, x)
 end
 
+function column(c::AbstractVector, x::Union{Int, Symbol})
+    if x == 1
+        return c
+    else
+        error("No column $x")
+    end
+end
+
 has_column(t::Columns, c::Int) = c <= nfields(columns(t))
 has_column(t::Columns, c::Symbol) = isa(columns(t), NamedTuple) ? haskey(columns(t), c) : false
 
@@ -198,7 +206,7 @@ Use `as(src, dest)` as the argument to rename a column
 from `src` to `dest`. Optionally, you can specify a
 function `f` to apply to the column: `as(f, src, dest)`.
 """
-function columns(c::Union{Columns, IndexedTable}, which...)
+function columns(c::Union{AbstractVector, IndexedTable}, which...)
     tupletype = _output_tuple(which)
     tupletype((column(c, w) for w in which)...)
 end
@@ -221,13 +229,7 @@ Returns an array of rows in a subset of columns in `t`
 identified by `which`.
 """
 rows(t::IndexedTable, which...) = rows(columns(t, which...))
-rows(t::Columns, which...) = rows(columns(t, which...))
-function rows(t::AbstractVector, which...)
-    if all(x->x==1, which)
-        Columns(map(x->t, which))
-    else error("No column $(join(filter(x->x!=1, which), " "))")
-    end
-end
+rows(t::AbstractVector, which...) = rows(columns(t, which...))
 
 ## Row-wise iteration that acknowledges key-value nature
 
@@ -273,7 +275,7 @@ as(f, src, dest) = As(f, src, dest)
 as(src, dest) = as(identity, src, dest)
 
 _name(x::As) = x.dest
-function column(t::Union{IndexedTable, Columns}, a::As)
+function column(t::Union{IndexedTable, AbstractVector}, a::As)
     a.f(column(t, a.src))
 end
 
