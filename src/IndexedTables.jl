@@ -196,17 +196,19 @@ function _output_tuple(which::Tuple)
     end
 end
 
+columns(t::Union{AbstractVector, IndexedTable}, which) = column(t, which)
+
 """
-`columns(t::IndexedTable, which...)`
+`columns(t::IndexedTable, which::Tuple)`
 
 Returns a subset of columns identified by `which`
 as a tuple or named tuple of vectors.
 
-Use `as(src, dest)` as the argument to rename a column
+Use `as(src, dest)` in the tuple to rename a column
 from `src` to `dest`. Optionally, you can specify a
 function `f` to apply to the column: `as(f, src, dest)`.
 """
-function columns(c::Union{AbstractVector, IndexedTable}, which...)
+function columns(c::Union{AbstractVector, IndexedTable}, which::Tuple)
     tupletype = _output_tuple(which)
     tupletype((column(c, w) for w in which)...)
 end
@@ -223,13 +225,13 @@ rows(x::AbstractVector) = x
 rows(cols::Tup) = Columns(cols)
 
 """
-`rows(t, which...)`
+`rows(t, which)`
 
 Returns an array of rows in a subset of columns in `t`
-identified by `which`.
+identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
+or a tuple of these types.
 """
-rows(t::IndexedTable, which...) = rows(columns(t, which...))
-rows(t::AbstractVector, which...) = rows(columns(t, which...))
+rows(t::Union{AbstractVector, IndexedTable}, which...) = rows(columns(t, which...))
 
 ## Row-wise iteration that acknowledges key-value nature
 
@@ -244,7 +246,8 @@ keys(t::IndexedTable) = t.index
 `keys(t, which...)`
 
 Returns a array of rows from a subset of columns
-in the index of `t`.
+in the index of `t`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
+or a tuple of these types.
 """
 keys(t::IndexedTable, which...) = rows(keys(t), which...)
 
@@ -259,7 +262,8 @@ values(t::IndexedTable) = t.data
 `values(t, which...)`
 
 Returns a array of rows from a subset of columns
-of the values in `t`.
+of the values in `t`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
+or a tuple of these types.
 """
 values(t::IndexedTable, which...) = rows(values(t), which...)
 
