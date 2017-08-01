@@ -176,6 +176,7 @@ end
 
 columns(v::AbstractVector) = (v,)
 columns(c::Columns) = c.columns
+columns(t::Union{AbstractVector, IndexedTable}, dim::Union{Int, Symbol}) = column(t, dim)
 
 """
 `columns(t::IndexedTable)`
@@ -206,7 +207,7 @@ Use `as(src, dest)` as the argument to rename a column
 from `src` to `dest`. Optionally, you can specify a
 function `f` to apply to the column: `as(f, src, dest)`.
 """
-function columns(c::Union{AbstractVector, IndexedTable}, which...)
+function columns(c::Union{AbstractVector, IndexedTable}, which::Tuple)
     tupletype = _output_tuple(which)
     tupletype((column(c, w) for w in which)...)
 end
@@ -228,8 +229,7 @@ rows(cols::Tup) = Columns(cols)
 Returns an array of rows in a subset of columns in `t`
 identified by `which`.
 """
-rows(t::IndexedTable, which...) = rows(columns(t, which...))
-rows(t::AbstractVector, which...) = rows(columns(t, which...))
+rows(t::Union{AbstractVector, IndexedTable}, which...) = rows(columns(t, which...))
 
 ## Row-wise iteration that acknowledges key-value nature
 
@@ -278,6 +278,8 @@ _name(x::As) = x.dest
 function column(t::Union{IndexedTable, AbstractVector}, a::As)
     a.f(column(t, a.src))
 end
+
+columns(t, a::As) = column(t, a)
 
 """
 `dimlabels(t::IndexedTable)`
