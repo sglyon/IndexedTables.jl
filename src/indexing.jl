@@ -6,7 +6,7 @@ _getindex{T,D<:Tuple}(t::IndexedTable{T,D}, idxs::D) = _getindex_scalar(t, idxs)
 _getindex(t::IndexedTable, idxs::Tuple{Vararg{Real}}) = _getindex_scalar(t, idxs)
 
 function _getindex_scalar(t, idxs)
-    i = searchsorted(t.index, idxs)
+    i = searchsorted(t.index, convertkey(t, idxs))
     length(i) != 1 && throw(KeyError(idxs))
     t.data[first(i)]
 end
@@ -54,7 +54,7 @@ end
 function _getindex(t::IndexedTable, idxs)
     I = t.index
     cs = astuple(I.columns)
-    if length(idxs) != length(I.columns)
+    if nfields(idxs) !== nfields(I.columns)
         error("wrong number of indices")
     end
     for idx in idxs
