@@ -5,7 +5,7 @@ using NamedTuples, PooledArrays
 
 import Base:
     show, eltype, length, getindex, setindex!, ndims, map, convert, keys, values,
-    ==, broadcast, empty!, copy, similar, sum, merge, merge!, mapslices,
+    ==, broadcast, empty!, copy, similar, sum, merge, merge!, mapslices, select,
     permutedims, reducedim, serialize, deserialize
 
 export IndexedTable, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column, rows, as,
@@ -277,11 +277,14 @@ end
 
 as(f, src, dest) = As(f, src, dest)
 as(src, dest) = as(identity, src, dest)
+as(xs::AbstractArray, dest) = as(xs, Symbol(""), dest)
 
 _name(x::As) = x.dest
 function column(t::Union{IndexedTable, AbstractVector}, a::As)
     a.f(column(t, a.src))
 end
+
+column(t::Union{IndexedTable, AbstractVector}, a::As{<:AbstractArray}) = a.f
 
 """
 `dimlabels(t::IndexedTable)`
@@ -301,6 +304,11 @@ function permutedims(t::IndexedTable, p::AbstractVector)
     end
     flush!(t)
     IndexedTable(Columns(t.index.columns[p]), t.data, copy=true)
+end
+
+function select(t::IndexedTable, p::Pair{<:Tuple, <:Any}; agg=nothing, copy=true)
+    idx, val = p
+    IndexedTable(rows(t, idx), rows(t, val), agg=agg, copy=copy)
 end
 
 # showing
