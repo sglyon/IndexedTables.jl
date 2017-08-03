@@ -245,3 +245,10 @@ end
     end
     ex
 end
+
+function convert(::Type{Columns}, xs::AbstractVector{<:Tup})
+    T = eltype(xs)
+    ys = similar(Columns{T, map_params(t->Vector{t}, T)}, length(xs))
+    copy!(ys, xs)
+end
+convert(::Type{Columns}, xs::Columns) = xs

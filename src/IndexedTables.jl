@@ -9,7 +9,7 @@ import Base:
     permutedims, reducedim, serialize, deserialize
 
 export IndexedTable, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column, rows, as,
-    itable, update!, aggregate, reducedim_vec, dimlabels
+    itable, update!, aggregate, reducedim_vec, dimlabels, withrows, withkeys, withvalues, withpairs
 
 const Tup = Union{Tuple,NamedTuple}
 const DimName = Union{Int,Symbol}
@@ -101,11 +101,11 @@ length(t::IndexedTable) = (flush!(t);length(t.index))
 eltype{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = T
 dimlabels{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = fieldnames(eltype(C))
 
-itable(keycols::Columns, valuecols::AbstractVector) =
-    IndexedTable(keycols, valuecols)
+itable(keycols::Columns, valuecols::AbstractVector; kwargs...) =
+    IndexedTable(keycols, valuecols; kwargs...)
 
-function itable(keycols::Tup, valuecols::Tup)
-    IndexedTable(Columns(keycols), Columns(valuecols))
+function itable(keycols::Tup, valuecols::Tup; kwargs...)
+    IndexedTable(Columns(keycols), Columns(valuecols); kwargs...)
 end
 
 ### Iteration API
@@ -286,6 +286,89 @@ end
 
 column(t::Union{IndexedTable, AbstractVector}, a::As{<:AbstractArray}) = a.f
 
+## with* functions
+
+"""
+`withrows(f, t; kwargs...)`
+
+Applies `f` to the `rows(t)`, `f` must return a vector of tuples or
+`Columns` which become the rows of the output table. The first N
+fields make up the key where N is the number of dimsensions of `t`.
+
+`kwargs...` are passed on to `itable` constructor.
+"""
+function withrows(f, t::IndexedTable; kwargs...)
+    y = f(rows(t))
+    i = ndims(t)
+    j = ndims(t)+1
+    names = eltype(keys(t)) <: NamedTuple ? dimlabels(t) : nothing
+    if isa(y, Columns)
+        if eltype(y) <: Tuple
+            idx = Columns(y.columns[1:i], names=names)
+        else
+            idx = Columns(y.columns[1:i])
+        end
+        itable(idx, Columns(y.columns[j:end]); kwargs...)
+    else
+        idx = convert(Columns, map(x->x[1:i], y))
+        idx = eltype(idx) <: Tuple ? Columns(columns(idx)...; names=names) : idx
+        itable(idx, convert(Columns, map(x->x[j:end], y)); kwargs...)
+    end
+end
+
+"""
+`withkeys(f, t; kwargs...)`
+
+Returns a new table with `f(keys(t))` as the keys, keeping the old values.
+
+`f(keys(t))` must have the same length as `keys(t)`
+
+`kwargs...` are passed on to `itable` constructor.
+"""
+withkeys(f, t; kwargs...) = itable(convert(Columns, f(keys(t))), values(t); kwargs...)
+
+"""
+`withkeys(f, t; kwargs...)`
+
+Returns a new table with `f(values(t))` as the values, keeping the old keys.
+
+`f(values(t))` must have the same length as `values(t)`
+
+`kwargs...` are passed on to `itable` constructor.
+"""
+function withvalues(f, t; kwargs...)
+    y = f(values(t))
+    if eltype(y) <: Tup
+        y = convert(Columns, y)
+    end
+    itable(keys(t), y; kwargs...)
+end
+
+
+"""
+`withpairs(f, t; kwargs...)`
+
+Applies a function `f` to the iterator of pairs in `t`. `f` must return
+a vector of pairs which will be used as the key-value collection to create
+a new indexed table.
+
+`kwargs...` are passed on to `itable` constructor.
+"""
+function withpairs(f, t; kwargs...)
+    y = f(pairs(t))
+
+    idx = map(first, y)
+    vals = map(x->x[2], y)
+
+    if eltype(idx) <: Tup
+        idx = convert(Columns, idx)
+    end
+    if eltype(vals) <: Tup
+        vals = convert(Columns, vals)
+    end
+    itable(convert(Columns, idx), vals; kwargs...)
+end
+
 """
 `dimlabels(t::IndexedTable)`
 
@@ -306,9 +389,10 @@ function permutedims(t::IndexedTable, p::AbstractVector)
     IndexedTable(Columns(t.index.columns[p]), t.data, copy=true)
 end
 
-function select(t::IndexedTable, p::Pair{<:Tuple, <:Any}; agg=nothing, copy=true)
+function select(t::Union{IndexedTable, Columns},
+                p::Pair{<:Tuple, <:Any}; kwargs...)
     idx, val = p
-    IndexedTable(rows(t, idx), rows(t, val), agg=agg, copy=copy)
+    itable(rows(t, idx), rows(t, val); kwargs...)
 end
 
 # showing

@@ -61,6 +61,21 @@ let
 
     @test collect(pairs(x)) == [@NT(a=1,b=1)=>@NT(c=3), @NT(a=1,b=2)=>@NT(c=4)]
     @test collect(pairs(y)) == [@NT(a=1,b=1)=>3, @NT(a=1,b=2)=>4]
+
+    for f in [withrows, withkeys, withvalues, withpairs]
+        # Check that identity preserves structure
+        z = f(identity, x)
+        @test z == x
+        @test typeof(z) == typeof(x)
+    end
+
+    @test withrows(x->x[[1,1,2,2]], x) == IndexedTable(Columns(a=[1,1,1,1], b=[1,1,2,2]), Columns(c=[3,3,4,4]))
+    @test withrows(x->x[[1,1,2,2]], x, agg=(x,y)->@NT(c=x.c+y.c)) == IndexedTable(keys(x), Columns(c=[6,8]))
+    @test withrows(x->map(t->tuple(t...), x[[1,1,2,2]]), x, agg=(x,y)->@NT(c=x[1]+y[1])) == IndexedTable(keys(x), Columns([6,8]))
+
+    @test withkeys(xs->map(x->@NT(b=x.b, a=x.a), xs), x) == permutedims(x, [2,1])
+    @test withvalues(reverse, x) == itable(keys(x), reverse(values(x)))
+    @test withpairs(ps -> map(p->p[2]=>p[1], ps), x) == itable(values(x), keys(x))
 end
 
 let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
