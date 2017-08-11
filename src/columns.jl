@@ -8,10 +8,10 @@ import Base:
 
 export Columns
 
-immutable Columns{D<:Tup, C<:Tup} <: AbstractVector{D}
+struct Columns{D<:Tup, C<:Tup} <: AbstractVector{D}
     columns::C
 
-    @compat function (::Type{Columns{D,C}}){D<:Tup,C<:Tup}(c)
+    function Columns{D,C}(c) where {D<:Tup,C<:Tup}
         length(c) > 0 || error("must have at least one column")
         n = length(c[1])
         for i = 2:length(c)
@@ -39,24 +39,24 @@ eltype{D,C}(::Type{Columns{D,C}}) = D
 length(c::Columns) = length(c.columns[1])
 ndims(c::Columns) = 1
 size(c::Columns) = (length(c),)
-@compat Base.IndexStyle(::Type{<:Columns}) = IndexLinear()
-summary{D<:Tuple}(c::Columns{D}) = "Columns{$D}"
+Base.IndexStyle(::Type{<:Columns}) = IndexLinear()
+summary(c::Columns{D}) where {D<:Tuple} = "Columns{$D}"
 
 empty!(c::Columns) = (foreach(empty!, c.columns); c)
-similar{D,C}(c::Columns{D,C}) = Columns{D,C}(map(similar, c.columns))
-similar{D,C}(c::Columns{D,C}, n::Integer) = Columns{D,C}(map(a->similar(a,n), c.columns))
+similar(c::Columns{D,C}) where {D,C} = Columns{D,C}(map(similar, c.columns))
+similar(c::Columns{D,C}, n::Integer) where {D,C} = Columns{D,C}(map(a->similar(a,n), c.columns))
 function Base.similar{T<:Columns}(::Type{T}, n::Int)::T
     T_cols = T.parameters[2]
     f = T_cols <: Tuple ? tuple : T_cols
     T(f(map(t->similar(t, n), T.parameters[2].parameters)...))
 end
 
-copy{D,C}(c::Columns{D,C}) = Columns{D,C}(map(copy, c.columns))
+copy(c::Columns{D,C}) where {D,C} = Columns{D,C}(map(copy, c.columns))
 
-getindex{D<:Tuple}(c::Columns{D}, i::Integer) = ith_all(i, c.columns)
-getindex{D<:NamedTuple}(c::Columns{D}, i::Integer) = D(ith_all(i, c.columns)...)
+getindex(c::Columns{D}, i::Integer) where {D<:Tuple} = ith_all(i, c.columns)
+getindex(c::Columns{D}, i::Integer) where {D<:NamedTuple} = D(ith_all(i, c.columns)...)
 
-getindex{D,C}(c::Columns{D,C}, p::AbstractVector) = Columns{D,C}(map(c->c[p], c.columns))
+getindex(c::Columns{D,C}, p::AbstractVector) where {D,C} = Columns{D,C}(map(c->c[p], c.columns))
 
 @inline setindex!(I::Columns, r::Tup, i::Integer) = (foreach((c,v)->(c[i]=v), I.columns, r); I)
 
@@ -130,8 +130,8 @@ sort(c::Columns) = c[sortperm(c)]
 map(p::ProjFn, c::Columns) = Columns(p(c.columns))
 map(p::Proj, c::Columns) = p(c.columns)
 
-vcat{D<:Tup,C<:Tuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}((map(vcat, map(x->x.columns, (c,cs...))...)...,))
-vcat{D<:Tup,C<:NamedTuple}(c::Columns{D,C}, cs::Columns{D,C}...) = Columns{D,C}(C(map(vcat, map(x->x.columns, (c,cs...))...)...,))
+vcat(c::Columns{D,C}, cs::Columns{D,C}...) where {D<:Tup,C<:Tuple} = Columns{D,C}((map(vcat, map(x->x.columns, (c,cs...))...)...,))
+vcat(c::Columns{D,C}, cs::Columns{D,C}...) where {D<:Tup,C<:NamedTuple} = Columns{D,C}(C(map(vcat, map(x->x.columns, (c,cs...))...)...,))
 
 function Base.vcat(c::Columns, cs::Columns...)
     fns = map(fieldnames, (map(x->x.columns, (c, cs...))))
@@ -145,7 +145,7 @@ function Base.vcat(c::Columns, cs::Columns...)
     Columns(map(vcat, map(x->x.columns, (c,cs...))...))
 end
 
-@compat abstract type SerializedColumns end
+abstract type SerializedColumns end
 
 function serialize(s::AbstractSerializer, c::Columns)
     Base.Serializer.serialize_type(s, SerializedColumns)
