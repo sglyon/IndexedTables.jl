@@ -1,4 +1,5 @@
 using TableTraits
+using TableTraitsUtils
 
 TableTraits.isiterable(x::IndexedTable) = true
 TableTraits.isiterabletable(x::IndexedTable) = true
@@ -7,33 +8,11 @@ function TableTraits.getiterator{S<:IndexedTable}(source::S)
     return rows(source)
 end
 
-# Sink
-
-@generated function _fillIndexedTable{idx_indices,data_indices}(iter,idx_storage,data_storage,::Type{idx_indices},::Type{data_indices})
-    push_exprs = Expr(:block)
-    for (i,idx) in enumerate(map(i->i.parameters[1],idx_indices.parameters))
-        ex = :( push!(idx_storage.columns[$i], row[$idx]) )
-        push!(push_exprs.args, ex)
-    end
-
-    for (i,idx) in enumerate(map(i->i.parameters[1],data_indices.parameters))
-        ex = :( push!(data_storage.columns[$i], row[$idx]) )
-        push!(push_exprs.args, ex)
-    end
-
-    quote
-        for row in iter
-            $push_exprs
-        end
-    end
-end
-
 function IndexedTable(x; idxcols::Union{Void,Vector{Symbol}}=nothing, datacols::Union{Void,Vector{Symbol}}=nothing)
     if isiterabletable(x)
         iter = getiterator(x)
 
         source_colnames = TableTraits.column_names(iter)
-        source_coltypes = TableTraits.column_types(iter)
 
         if idxcols==nothing && datacols==nothing
             idxcols = source_colnames[1:end-1]
@@ -52,16 +31,13 @@ function IndexedTable(x; idxcols::Union{Void,Vector{Symbol}}=nothing, datacols::
             error("Unknown datacol")
         end
 
+        source_data, source_names = TableTraitsUtils.create_columns_from_iterabletable(x)
+
         idxcols_indices = [findfirst(source_colnames,i) for i in idxcols]
         datacols_indices = [findfirst(source_colnames,i) for i in datacols]
 
-        idx_storage = Columns([Array{source_coltypes[i],1}(0) for i in idxcols_indices]..., names=[source_colnames[i] for i in idxcols_indices])
-        data_storage = Columns([Array{source_coltypes[i],1}(0) for i in datacols_indices]..., names=[source_colnames[i] for i in datacols_indices])
-
-        tuple_type_idx = eval(Expr(:curly, :Tuple, [Expr(:curly, :Val, i) for i in idxcols_indices]...))
-        tuple_type_data = eval(Expr(:curly, :Tuple, [Expr(:curly, :Val, i) for i in datacols_indices]...))
-
-        _fillIndexedTable(iter, idx_storage, data_storage, tuple_type_idx, tuple_type_data)
+        idx_storage = Columns(source_data[idxcols_indices]..., names=source_colnames[idxcols_indices])
+        data_storage = Columns(source_data[datacols_indices]..., names=source_colnames[datacols_indices])
 
         return IndexedTable(idx_storage, data_storage)
     elseif idxcols==nothing && datacols==nothing
