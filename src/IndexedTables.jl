@@ -435,4 +435,7 @@ include("join.jl")
 # query and aggregate
 include("query.jl")
 
+# TableTraits.jl integration
+include("tabletraits.jl")
+
 end # module
