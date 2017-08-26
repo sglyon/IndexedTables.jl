@@ -113,6 +113,9 @@ function _aggregate_vec!(f, idxs::Columns, data)
         val = f(data[i1:(i-1)])
         if newlen == 0
             newdata = [val]
+            if isa(val, Tup)
+                newdata = convert(Columns, newdata)
+            end
         else
             push!(newdata, val)
         end
@@ -141,6 +144,9 @@ function aggregate_vec_to(f, src_idxs, src_data)
         val = f(src_data[i1:(i-1)])
         if newlen == 0
             newdata = [val]
+            if isa(val, Tup)
+                newdata = convert(Columns, newdata)
+            end
         else
             push!(newdata, val)
         end
@@ -165,6 +171,9 @@ function _aggregate_vec(f, idxs::Columns, data)
         val = f(data[i1:(i-1)])
         if newlen == 0
             newdata = [val]
+            if isa(val, Tup)
+                newdata = convert(Columns, newdata)
+            end
         else
             push!(newdata, val)
         end
