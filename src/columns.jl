@@ -51,7 +51,16 @@ function Base.similar{T<:Columns}(::Type{T}, n::Int)::T
     T(f(map(t->similar(t, n), T.parameters[2].parameters)...))
 end
 
-copy(c::Columns{D,C}) where {D,C} = Columns{D,C}(map(copy, c.columns))
+function convert{N}(::Type{Columns}, x::AbstractArray{<:NTuple{N,Any}})
+    eltypes = (eltype(x).parameters...)
+    copy!(Columns(map(t->Vector{t}(length(x)), eltypes)), x)
+end
+
+function convert(::Type{Columns}, x::AbstractArray{<:NamedTuple})
+    eltypes = (eltype(x).parameters...)
+    copy!(Columns(map(t->Vector{t}(length(x)), eltypes)..., names=fieldnames(eltype(x))), x)
+end
+
 
 getindex(c::Columns{D}, i::Integer) where {D<:Tuple} = ith_all(i, c.columns)
 getindex(c::Columns{D}, i::Integer) where {D<:NamedTuple} = D(ith_all(i, c.columns)...)

@@ -16,6 +16,12 @@ let a = Columns([1,2,1],["foo","bar","baz"]),
     @test size(a) == size(b) == size(c) == (3,)
     @test eltype(a) == Tuple{Int,String}
     @test length(similar(a)) == 3
+    aa = map(tuple, columns(a)...)
+    @test isa(convert(Columns, aa), Columns)
+    @test convert(Columns, aa) == a
+    bb = map(@NT(x,y), columns(a)...)
+    @test isa(convert(Columns, bb), Columns)
+    @test convert(Columns, bb) == Columns(x=column(a,1), y=column(a, 2))
 end
 
 let
