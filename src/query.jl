@@ -68,30 +68,59 @@ function aggregate!(f, x::IndexedTable)
     x
 end
 
-"""
-`aggregate(f::Function, arr::IndexedTable)`
+function valueselector(t)
+    if isa(values(t), Columns)
+        ((ndims(t) + (1:nfields(eltype(values(t)))))...)
+    else
+        return ndims(t) + 1
+    end
+end
 
-Combine adjacent rows with equal indices using the given 2-argument reduction function,
-returning the result in a new array.
-"""
-function aggregate(f, x::IndexedTable)
-    idxs, data = aggregate_to(f, x.index, x.data)
-    IndexedTable(idxs, data, presorted=true, copy=false)
+function aggregate(f, t::IndexedTable;
+                   by = (1:ndims(t)...),
+                   with = valueselector(t),
+                   presorted=false)
+    bycol = rows(t, by)
+    if !presorted
+        canonorder = map(i->colindex(eltype(keys(t)), eltype(t), i), by)
+        if [canonorder...] == [1:length(by);] && length(by) <= ndims(t)
+            # first n index columns
+            perm = Base.OneTo(length(bycol))
+        else
+            perm = sortperm(bycol)
+        end
+    else
+        perm = Base.OneTo(length(bycol))
+    end
+    IndexedTable(aggregate_to(f, bycol, rows(t, with), perm)...; presorted=true)
+end
+
+function colindex(K, V, col)
+    if isa(col, Int) && 1 <= t <= nfields(K) + nfields(V)
+        return col
+    elseif isa(col, Symbol)
+        if col in fieldnames(K)
+            return findfirst(fieldnames(K), col)
+        elseif col in fieldnames(V)
+            return nfields(K) + findfirst(fieldnames(V), col)
+        end
+    end
+    error("column $col not found.")
 end
 
 # aggregate out of place, building up new indexes and data
-function aggregate_to(f, src_idxs, src_data)
+function aggregate_to(f, src_idxs, src_data, perm=Base.OneTo(length(src_idxs)))
     dest_idxs, dest_data = similar(src_idxs,0), similar(src_data,0)
     n = length(src_idxs)
     i1 = 1
     while i1 <= n
-        val = src_data[i1]
+        val = src_data[perm[i1]]
         i = i1+1
-        while i <= n && roweq(src_idxs, i, i1)
-            val = f(val, src_data[i])
+        while i <= n && roweq(src_idxs, perm[i], perm[i1])
+            val = f(val, src_data[perm[i]])
             i += 1
         end
-        push!(dest_idxs, src_idxs[i1])
+        push!(dest_idxs, src_idxs[perm[i1]])
         push!(dest_data, val)
         i1 = i
     end
@@ -130,7 +159,7 @@ function _aggregate_vec!(f, idxs::Columns, data)
 end
 
 # out of place vector aggregation
-function aggregate_vec_to(f, src_idxs, src_data)
+function aggregate_vec_to(f, src_idxs, src_data, perm=Base.OneTo(length(src_idxs)))
     n = length(src_idxs)
     dest_idxs = similar(src_idxs,0)
     local newdata
@@ -138,10 +167,10 @@ function aggregate_vec_to(f, src_idxs, src_data)
     i1 = 1
     while i1 <= n
         i = i1+1
-        while i <= n && roweq(src_idxs, i, i1)
+        while i <= n && roweq(src_idxs, perm[i], perm[i1])
             i += 1
         end
-        val = f(src_data[i1:(i-1)])
+        val = f(src_data[perm[i1:(i-1)]])
         if newlen == 0
             newdata = [val]
             if isa(val, Tup)
@@ -151,7 +180,7 @@ function aggregate_vec_to(f, src_idxs, src_data)
             push!(newdata, val)
         end
         newlen += 1
-        push!(dest_idxs, src_idxs[i1])
+        push!(dest_idxs, src_idxs[perm[i1]])
         i1 = i
     end
     (dest_idxs, (newlen==0 ? Union{}[] : newdata))
