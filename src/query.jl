@@ -10,11 +10,10 @@ Example: `select(arr, 1 => x->x>10, 3 => x->x!=10 ...)`
 function Base.select(arr::IndexedTable, conditions::Pair...)
     flush!(arr)
     indxs = [1:length(arr);]
-    cols = arr.index.columns
     for (c,f) in conditions
-        filt_by_col!(f, cols[c], indxs)
+        filt_by_col!(f, column(arr, c), indxs)
     end
-    IndexedTable(Columns(map(x->x[indxs], cols)), arr.data[indxs], presorted=true)
+    IndexedTable(keys(arr)[indxs], values(arr)[indxs], presorted=true)
 end
 
 """
@@ -25,15 +24,15 @@ Select a subset of index columns. If the resulting array has duplicate index ent
 """
 function Base.select(arr::IndexedTable, which::DimName...; agg=nothing)
     flush!(arr)
-    IndexedTable(Columns(arr.index.columns[[which...]]), arr.data, agg=agg, copy=true)
+    IndexedTable(keys(arr, (which...)), values(arr), agg=agg, copy=true)
 end
 
 # Filter on data field
 function Base.filter(fn::Function, arr::IndexedTable)
     flush!(arr)
-    data = arr.data
+    data = values(arr)
     indxs = filter(i->fn(data[i]), eachindex(data))
-    IndexedTable(Columns(map(x->x[indxs], arr.index.columns)), data[indxs], presorted=true)
+    IndexedTable(keys(arr)[indxs], data[indxs], presorted=true)
 end
 
 # aggregation
