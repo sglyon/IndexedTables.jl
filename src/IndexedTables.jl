@@ -169,7 +169,7 @@ function column(t::IndexedTable, col::Symbol)
         return column(values(t), col)
     end
 
-    error("Couldn't find column named $n")
+    error("Couldn't find column named $col")
 end
 
 ## Column-wise iteration:
