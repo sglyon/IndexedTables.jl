@@ -112,7 +112,7 @@ function refine_perm!(p, cols, c, x, y, lo, hi)
     i = lo
     while i < hi
         i1 = i+1
-        @inbounds while i1 <= hi && x[p[i1]] == x[p[i]]
+        @inbounds while i1 <= hi && roweq(x, p[i1], p[i])
             i1 += 1
         end
         i1 -= 1
@@ -218,6 +218,8 @@ end
     end
     ex
 end
+
+@inline roweq(x::AbstractVector, i, j) = x[i] == x[j]
 
 # uses number of columns from `d`, assuming `c` has more or equal
 # dimensions, for broadcast joins.
