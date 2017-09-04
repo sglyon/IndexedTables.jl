@@ -100,7 +100,7 @@ function Base.sortperm(t::IndexedTable, by)
     if sorted_cols > 0
         nxtcol = bycols[sorted_cols+1]
         p = [1:length(t);]
-        refine_perm!(p, bycols, sorted_cols, rows(t, by[1:sorted_cols]), sortedlabels(nxtcol), 1, length(t))
+        refine_perm!(p, bycols, sorted_cols, rows(t, by[1:sorted_cols]), sortproxy(nxtcol), 1, length(t))
         return p
     else
         return sortperm(rows(bycols))

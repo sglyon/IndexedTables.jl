@@ -91,8 +91,8 @@ function ==(x::Columns, y::Columns)
     return true
 end
 
-sortedlabels(x::PooledArray) = x.refs
-sortedlabels{T<:Integer}(x::AbstractArray{T}) = x
+sortproxy(x::PooledArray) = x.refs
+sortproxy{T<:Integer}(x::AbstractArray{T}) = x
 
 function sortperm(c::Columns)
     cols = c.columns
@@ -100,7 +100,7 @@ function sortperm(c::Columns)
     p = sortperm_fast(x)
     if length(cols) > 1
         y = cols[2]
-        refine_perm!(p, cols, 1, x, sortedlabels(y), 1, length(x))
+        refine_perm!(p, cols, 1, x, sortproxy(y), 1, length(x))
     end
     return p
 end
@@ -123,7 +123,7 @@ function refine_perm!(p, cols, c, x, y, lo, hi)
             sort_sub_by!(p, i, i1, y, order, temp)
             if c < nc-1
                 z = cols[c+2]
-                refine_perm!(p, cols, c+1, y, sortedlabels(z), i, i1)
+                refine_perm!(p, cols, c+1, y, sortproxy(z), i, i1)
             end
         end
         i = i1+1

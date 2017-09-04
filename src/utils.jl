@@ -169,7 +169,7 @@ end
 
 # sortperm with counting sort
 
-sortperm_fast(x) = sortperm_fast(sortedlabels(x))
+sortperm_fast(x) = sortperm_fast(sortproxy(x))
 
 function sortperm_fast(v::Vector{T}) where T<:Integer
     n = length(v)
@@ -300,7 +300,7 @@ function _int_getindex!(p, idxs)
     idxs
 end
 
-function sortedlabels(xs)
+function sortproxy(xs)
     uq, labels = _label(xs)
     p = convert(Vector{eltype(labels)}, invperm(sortperm(uq)))
     _int_getindex!(p, labels)
