@@ -24,7 +24,11 @@ Select a subset of index columns. If the resulting array has duplicate index ent
 """
 function Base.select(arr::IndexedTable, which::DimName...; agg=nothing)
     flush!(arr)
-    IndexedTable(keys(arr, (which...)), values(arr), agg=agg, copy=true)
+    if eltype(keys(arr)) <: NamedTuple
+        fn = fieldnames(eltype(keys(arr)))
+        names = map(x->isa(x, Int) ? fn[x] : x, which)
+    end
+    IndexedTable(keys(arr, (names...)), values(arr), agg=agg, copy=true)
 end
 
 # Filter on data field
