@@ -346,11 +346,12 @@ function _broadcast_trailing!(f, A::IndexedTable, B::IndexedTable, C::IndexedTab
     return A
 end
 
-function _bcast_loop!(f::Function, A::IndexedTable, B::IndexedTable, C::IndexedTable, B_common, B_perm)
+function _bcast_loop!(f::Function, dA, B::IndexedTable, C::IndexedTable, B_common, B_perm)
     m, n = length(B_perm), length(C)
     jlo = klo = 1
     iperm = zeros(Int, m)
     cnt = 0
+    idxperm = Int32[]
     @inbounds while jlo <= m && klo <= n
         pjlo = B_perm[jlo]
         x = rowcmp(B_common, pjlo, C.index, klo)
@@ -369,12 +370,12 @@ function _bcast_loop!(f::Function, A::IndexedTable, B::IndexedTable, C::IndexedT
             # `iperm`, leaving some 0 gaps to be filtered out later.
             cnt += 1
             iperm[j] = cnt
-            pushrow!(A.index, B.index, j)
-            push!(A.data, f(B.data[j], Ck))
+            push!(idxperm, j)
+            push!(dA, f(B.data[j], Ck))
         end
         jlo, klo = jhi, klo+1
     end
-    filter!(i->i!=0, iperm)
+    B.index[idxperm], filter!(i->i!=0, iperm)
 end
 
 # broadcast C over B, into A. assumes A and B have same dimensions and ndims(B) >= ndims(C)
@@ -395,7 +396,8 @@ function _broadcast!(f::Function, A::IndexedTable, B::IndexedTable, C::IndexedTa
     B_common_cols = Columns(B.index.columns[common])
     B_perm = sortperm(B_common_cols)
     if C_common == C_dims
-        iperm = _bcast_loop!(f, A, B, C, B_common_cols, B_perm)
+        idx, iperm = _bcast_loop!(f, values(A), B, C, B_common_cols, B_perm)
+        A = IndexedTable(idx, values(A), copy=false, presorted=true)
         if !issorted(A.index)
             permute!(A.index, iperm)
             copy!(A.data, A.data[iperm])
