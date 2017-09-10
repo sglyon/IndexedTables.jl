@@ -330,7 +330,7 @@ function _broadcast_trailing!(f, A::IndexedTable, B::IndexedTable, C::IndexedTab
         c = rowcmp(lI, i, rI, j)
         if c == 0
             while true
-                push!(I, lI[i])
+                pushrow!(I, lI, i)
                 push!(data, f(lD[i], rD[j]))
                 i += 1
                 (i <= ll && rowcmp(lI, i, rI, j)==0) || break
@@ -369,7 +369,7 @@ function _bcast_loop!(f::Function, A::IndexedTable, B::IndexedTable, C::IndexedT
             # `iperm`, leaving some 0 gaps to be filtered out later.
             cnt += 1
             iperm[j] = cnt
-            push!(A.index, B.index[j])
+            pushrow!(A.index, B.index, j)
             push!(A.data, f(B.data[j], Ck))
         end
         jlo, klo = jhi, klo+1

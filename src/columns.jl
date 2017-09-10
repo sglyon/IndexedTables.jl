@@ -196,6 +196,7 @@ end
 # row operations
 
 copyrow!(I::Columns, i, src) = foreach(c->copyelt!(c, i, src), I.columns)
+pushrow!(to::Columns, from::Columns, i) = foreach((a,b)->push!(a, b[i]), to.columns, from.columns)
 
 @generated function rowless{D,C}(c::Columns{D,C}, i, j)
     N = length(C.parameters)
