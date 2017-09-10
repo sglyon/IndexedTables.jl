@@ -95,12 +95,12 @@ function leftjoin(left::IndexedTable, right::IndexedTable, op = IndexedTables.ri
                   by=keyselector(left),
                   with=valueselector(left),
                   leftby=by, rightby=by,
-                  leftwith=with, rigthwith=with,
+                  leftwith=with, rightwith=with,
                  )
     flush!(left); flush!(right)
     lI, rI = rows(left, leftby), rows(right, rightby)
     lP, rP = sortperm(left, leftby), sortperm(right, rightby)
-    lD, rD = rows(left, leftwith), rows(right, with)
+    lD, rD = rows(left, leftwith), rows(right, rightwith)
 
     # allow right table to have different column names
 
@@ -148,7 +148,6 @@ function _leftjoin!(op, lI, rI, lP, rP, lD, rD, data)
                 data[i] = op(lD[li], rD[rj])
             end
             i += 1
-            j += 1
         else
             j += 1
         end

@@ -27,6 +27,8 @@ function Base.select(arr::IndexedTable, which::DimName...; agg=nothing)
     if eltype(keys(arr)) <: NamedTuple
         fn = fieldnames(eltype(keys(arr)))
         names = map(x->isa(x, Int) ? fn[x] : x, which)
+    else
+        names = which
     end
     IndexedTable(keys(arr, (names...)), values(arr), agg=agg, copy=true)
 end
@@ -86,6 +88,7 @@ function keyselector(t)
 end
 
 function Base.sortperm(t::IndexedTable, by)
+    @show fieldnames(columns(t)), by
 
     canonorder = map(i->colindex(eltype(keys(t)), eltype(t), i), by)
 
