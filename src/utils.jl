@@ -84,7 +84,7 @@ fields in the output.
 The callable is specialized to work efficiently on `Columns` by calling it once
 on `.columns` field to get the equivalent result.
 
-Calling `map` on an `IndexedTable` with a `@pick` callable will run the callable on
+Calling `map` on an `NDSparse` with a `@pick` callable will run the callable on
 the data columns.
 
 # Examples
@@ -94,8 +94,8 @@ the data columns.
     @pick(2,1)(c) == Columns([2.0], [1])
     @pick(y,x)(c) == Columns(y=[2.0], x=[1])
 
-    t = IndexedTable([1], c)
-    map(@pick(y, x), t) == IndexedTables([1], Columns(y=[2.0], x=[1]))
+    t = NDSparse([1], c)
+    map(@pick(y, x), t) == NDSparse([1], Columns(y=[2.0], x=[1]))
 """
 macro pick(ex...)
     tup = if all([isa(x, Symbol) for x in ex])
@@ -169,7 +169,14 @@ end
 
 # sortperm with counting sort
 
-sortperm_fast(x) = sortperm_fast(sortproxy(x))
+function sortperm_fast(x, cardinality)
+    if cardinality < 0.1
+        sortperm_fast(sortproxy(x))
+    else
+        sortperm(x)
+    end
+end
+sortperm_fast(x) = sortperm(x)
 
 function sortperm_fast(v::Vector{T}) where T<:Integer
     n = length(v)

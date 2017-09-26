@@ -2,7 +2,7 @@ export naturaljoin, innerjoin, leftjoin, asofjoin, leftjoin!
 
 ## Joins
 
-function naturaljoin(left::IndexedTable, right::IndexedTable, op; kwargs...)
+function naturaljoin(left::NDSparse, right::NDSparse, op; kwargs...)
     naturaljoin(left, right; op=op, kwargs...)
 end
 
@@ -10,7 +10,7 @@ const innerjoin = naturaljoin
 
 similarz(a) = similar(a,0)
 
-function naturaljoin(left::IndexedTable, right::IndexedTable;
+function naturaljoin(left::NDSparse, right::NDSparse;
                      by=keyselector(left),
                      leftby=by, rightby=by,
                      leftwith=valueselector(left),
@@ -84,14 +84,14 @@ function _naturaljoin(op, data, lO, rO, lI, rI, lD, rD, lP, rP)
     end
 
     # Generate final datastructure
-    IndexedTable(I, data, presorted=true)
+    NDSparse(I, data, presorted=true)
 end
 
-map(f, x::IndexedTable{T,D}, y::IndexedTable{S,D}) where {T,S,D} = naturaljoin(x, y, f)
+map(f, x::NDSparse{T,D}, y::NDSparse{S,D}) where {T,S,D} = naturaljoin(x, y, f)
 
 # left join
 
-function leftjoin(left::IndexedTable, right::IndexedTable, op = IndexedTables.right;
+function leftjoin(left::NDSparse, right::NDSparse, op = IndexedTables.right;
                   by=keyselector(left),
                   with=valueselector(left),
                   leftby=by, rightby=by,
@@ -108,7 +108,7 @@ function leftjoin(left::IndexedTable, right::IndexedTable, op = IndexedTables.ri
     _leftjoin!(op, copy(lI), rI, lP, rP, lD, rD, data)
 end
 
-function leftjoin!(left::IndexedTable, right::IndexedTable, op = IndexedTables.right;
+function leftjoin!(left::NDSparse, right::NDSparse, op = IndexedTables.right;
                   by=keyselector(left),
                   with=valueselector(left),
                   leftby=by, rightby=by,
@@ -160,12 +160,12 @@ function _leftjoin!(op, lI, rI, lP, rP, lD, rD, data)
         permute!(lI, lP)
     end
 
-    IndexedTable(lI, data, presorted=true)
+    NDSparse(lI, data, presorted=true)
 end
 
 # asof join
 
-function asofjoin(left::IndexedTable, right::IndexedTable;
+function asofjoin(left::NDSparse, right::NDSparse;
                   by=keyselector(left), with=valueselector(left),
                   leftby=by, rightby=by,
                   leftwith=with, rightwith=with,
@@ -210,7 +210,7 @@ function _asofjoin!(lI, rI, lP, rP, lD, rD, data)
         permute!(lI, lP)
     end
 
-    IndexedTable(lI, data, presorted=true)
+    NDSparse(lI, data, presorted=true)
 end
 
 # merge - union join
@@ -243,15 +243,15 @@ function promoted_similar(x::AbstractArray, y::AbstractArray, n)
 end
 
 # assign y into x out-of-place
-merge(x::IndexedTable{T,D}, y::IndexedTable{S,D}; agg = IndexedTables.right) where {T,S,D<:Tuple} = (flush!(x);flush!(y); _merge(x, y, agg))
+merge(x::NDSparse{T,D}, y::NDSparse{S,D}; agg = IndexedTables.right) where {T,S,D<:Tuple} = (flush!(x);flush!(y); _merge(x, y, agg))
 # merge without flush!
-function _merge(x::IndexedTable{T,D}, y::IndexedTable{S,D}, agg) where {T,S,D}
+function _merge(x::NDSparse{T,D}, y::NDSparse{S,D}, agg) where {T,S,D}
     I, J = x.index, y.index
     lI, lJ = length(I), length(J)
     #if isless(I[end], J[1])
-    #    return IndexedTable(vcat(x.index, y.index), vcat(x.data, y.data), presorted=true)
+    #    return NDSparse(vcat(x.index, y.index), vcat(x.data, y.data), presorted=true)
     #elseif isless(J[end], I[1])
-    #    return IndexedTable(vcat(y.index, x.index), vcat(y.data, x.data), presorted=true)
+    #    return NDSparse(vcat(y.index, x.index), vcat(y.data, x.data), presorted=true)
     #end
     if agg === nothing
         n = lI + lJ
@@ -264,7 +264,7 @@ function _merge(x::IndexedTable{T,D}, y::IndexedTable{S,D}, agg) where {T,S,D}
     _merge!(K, data, x, y, agg)
 end
 
-function _merge!(K, data, x::IndexedTable, y::IndexedTable, agg)
+function _merge!(K, data, x::NDSparse, y::NDSparse, agg)
     I, J = x.index, y.index
     lI, lJ = length(I), length(J)
     n = length(K)
@@ -307,10 +307,10 @@ function _merge!(K, data, x::IndexedTable, y::IndexedTable, agg)
         end
         k += 1
     end
-    IndexedTable(K, data, presorted=true)
+    NDSparse(K, data, presorted=true)
 end
 
-function merge(x::IndexedTable, xs::IndexedTable...; agg = nothing)
+function merge(x::NDSparse, xs::NDSparse...; agg = nothing)
     as = [x, xs...]
     filter!(a->length(a)>0, as)
     length(as) == 0 && return x
@@ -319,7 +319,7 @@ function merge(x::IndexedTable, xs::IndexedTable...; agg = nothing)
     sort!(as, by=y->first(y.index))
     if all(i->isless(as[i-1].index[end], as[i].index[1]), 2:length(as))
         # non-overlapping
-        return IndexedTable(vcat(map(a->a.index, as)...),
+        return NDSparse(vcat(map(a->a.index, as)...),
                             vcat(map(a->a.data,  as)...),
                             presorted=true)
     end
@@ -327,13 +327,13 @@ function merge(x::IndexedTable, xs::IndexedTable...; agg = nothing)
 end
 
 # merge in place
-function merge!(x::IndexedTable{T,D}, y::IndexedTable{S,D}; agg = IndexedTables.right) where {T,S,D<:Tuple}
+function merge!(x::NDSparse{T,D}, y::NDSparse{S,D}; agg = IndexedTables.right) where {T,S,D<:Tuple}
     flush!(x)
     flush!(y)
     _merge!(x, y, agg)
 end
 # merge! without flush!
-function _merge!(dst::IndexedTable, src::IndexedTable, f)
+function _merge!(dst::NDSparse, src::NDSparse, f)
     if isless(dst.index[end], src.index[1])
         append!(dst.index, src.index)
         append!(dst.data, src.data)
@@ -368,7 +368,7 @@ function find_corresponding(Ap, Bp)
     tuple(matches...)
 end
 
-function match_indices(A::IndexedTable, B::IndexedTable)
+function match_indices(A::NDSparse, B::NDSparse)
     if isa(A.index.columns, NamedTuple) && isa(B.index.columns, NamedTuple)
         Ap = fieldnames(A.index.columns)
         Bp = fieldnames(B.index.columns)
@@ -382,7 +382,7 @@ end
 # broadcast over trailing dimensions, i.e. C's dimensions are a prefix
 # of B's. this is an easy case since it's just an inner join plus
 # sometimes repeating values from the right argument.
-function _broadcast_trailing!(f, A::IndexedTable, B::IndexedTable, C::IndexedTable)
+function _broadcast_trailing!(f, A::NDSparse, B::NDSparse, C::NDSparse)
     I = A.index
     data = A.data
     lI, rI = B.index, C.index
@@ -411,7 +411,7 @@ function _broadcast_trailing!(f, A::IndexedTable, B::IndexedTable, C::IndexedTab
     return A
 end
 
-function _bcast_loop!(f::Function, dA, B::IndexedTable, C::IndexedTable, B_common, B_perm)
+function _bcast_loop!(f::Function, dA, B::NDSparse, C::NDSparse, B_common, B_perm)
     m, n = length(B_perm), length(C)
     jlo = klo = 1
     iperm = zeros(Int, m)
@@ -444,7 +444,7 @@ function _bcast_loop!(f::Function, dA, B::IndexedTable, C::IndexedTable, B_commo
 end
 
 # broadcast C over B, into A. assumes A and B have same dimensions and ndims(B) >= ndims(C)
-function _broadcast!(f::Function, A::IndexedTable, B::IndexedTable, C::IndexedTable; dimmap=nothing)
+function _broadcast!(f::Function, A::NDSparse, B::NDSparse, C::NDSparse; dimmap=nothing)
     flush!(A); flush!(B); flush!(C)
     empty!(A)
     if dimmap === nothing
@@ -462,7 +462,7 @@ function _broadcast!(f::Function, A::IndexedTable, B::IndexedTable, C::IndexedTa
     B_perm = sortperm(B_common_cols)
     if C_common == C_dims
         idx, iperm = _bcast_loop!(f, values(A), B, C, B_common_cols, B_perm)
-        A = IndexedTable(idx, values(A), copy=false, presorted=true)
+        A = NDSparse(idx, values(A), copy=false, presorted=true)
         if !issorted(A.index)
             permute!(A.index, iperm)
             copy!(A.data, A.data[iperm])
@@ -476,7 +476,7 @@ function _broadcast!(f::Function, A::IndexedTable, B::IndexedTable, C::IndexedTa
 end
 
 """
-`broadcast(f::Function, A::IndexedTable, B::IndexedTable; dimmap::Tuple{Vararg{Int}})`
+`broadcast(f::Function, A::NDSparse, B::NDSparse; dimmap::Tuple{Vararg{Int}})`
 
 Compute an inner join of `A` and `B` using function `f`, where the dimensions
 of `B` are a subset of the dimensions of `A`. Values from `B` are repeated over
@@ -490,16 +490,16 @@ dimensions of `j` should have `dimmap[i]==0`.
 If `dimmap` is not specified, it is determined automatically using index column
 names and types.
 """
-function broadcast(f::Function, A::IndexedTable, B::IndexedTable; dimmap=nothing)
+function broadcast(f::Function, A::NDSparse, B::NDSparse; dimmap=nothing)
     out_T = _promote_op(f, eltype(A), eltype(B))
     if ndims(B) > ndims(A)
-        out = IndexedTable(similar(B.index, 0), similar(arrayof(out_T), 0))
+        out = NDSparse(similar(B.index, 0), similar(arrayof(out_T), 0))
         _broadcast!((x,y)->f(y,x), out, B, A, dimmap=dimmap)
     else
-        out = IndexedTable(similar(A.index, 0), similar(arrayof(out_T), 0))
+        out = NDSparse(similar(A.index, 0), similar(arrayof(out_T), 0))
         _broadcast!(f, out, A, B, dimmap=dimmap)
     end
 end
 
-broadcast(f::Function, x::IndexedTable, y) = IndexedTable(x.index, broadcast(f, x.data, y), presorted=true)
-broadcast(f::Function, y, x::IndexedTable) = IndexedTable(x.index, broadcast(f, y, x.data), presorted=true)
+broadcast(f::Function, x::NDSparse, y) = NDSparse(x.index, broadcast(f, x.data, y), presorted=true)
+broadcast(f::Function, y, x::NDSparse) = NDSparse(x.index, broadcast(f, y, x.data), presorted=true)

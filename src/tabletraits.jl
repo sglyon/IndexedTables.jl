@@ -1,14 +1,14 @@
 using TableTraits
 using TableTraitsUtils
 
-TableTraits.isiterable(x::IndexedTable) = true
-TableTraits.isiterabletable(x::IndexedTable) = true
+TableTraits.isiterable(x::NDSparse) = true
+TableTraits.isiterabletable(x::NDSparse) = true
 
-function TableTraits.getiterator{S<:IndexedTable}(source::S)
+function TableTraits.getiterator{S<:NDSparse}(source::S)
     return rows(source)
 end
 
-function IndexedTable(x; idxcols::Union{Void,Vector{Symbol}}=nothing, datacols::Union{Void,Vector{Symbol}}=nothing)
+function NDSparse(x; idxcols::Union{Void,Vector{Symbol}}=nothing, datacols::Union{Void,Vector{Symbol}}=nothing)
     if isiterabletable(x)
         iter = getiterator(x)
 
@@ -39,10 +39,10 @@ function IndexedTable(x; idxcols::Union{Void,Vector{Symbol}}=nothing, datacols::
         idx_storage = Columns(source_data[idxcols_indices]..., names=source_colnames[idxcols_indices])
         data_storage = Columns(source_data[datacols_indices]..., names=source_colnames[datacols_indices])
 
-        return IndexedTable(idx_storage, data_storage)
+        return NDSparse(idx_storage, data_storage)
     elseif idxcols==nothing && datacols==nothing
-        return convert(IndexedTable, x)
+        return convert(NDSparse, x)
     else
-        throw(ArgumentError("x cannot be turned into an IndexedTable."))
+        throw(ArgumentError("x cannot be turned into an NDSparse."))
     end
 end

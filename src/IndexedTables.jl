@@ -8,7 +8,7 @@ import Base:
     ==, broadcast, empty!, copy, similar, sum, merge, merge!, mapslices,
     permutedims, reducedim, serialize, deserialize
 
-export IndexedTable, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column, rows, as,
+export NDSparse, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column, rows, as,
     itable, update!, aggregate, reducedim_vec, dimlabels
 
 const Tup = Union{Tuple,NamedTuple}
@@ -16,8 +16,11 @@ const DimName = Union{Int,Symbol}
 
 include("utils.jl")
 include("columns.jl")
+include("itable.jl")
 
-struct IndexedTable{T, D<:Tuple, C<:Columns, V<:AbstractVector}
+struct NDSparse{T, D<:Tuple, C<:Columns, V<:AbstractVector}
+    _table::NextTable
+
     index::C
     data::V
 
@@ -25,15 +28,16 @@ struct IndexedTable{T, D<:Tuple, C<:Columns, V<:AbstractVector}
     data_buffer::V
 end
 
-Base.@deprecate_binding NDSparse IndexedTable
+Base.@deprecate_binding IndexedTable NDSparse
 
 # optional, non-exported name
-const Table = IndexedTable
+const Table = NDSparse
+const Tabular = Union{NDSparse, NextTable}
 
 """
-`IndexedTable(indices::Columns, data::AbstractVector; kwargs...)`
+`NDSparse(indices::Columns, data::AbstractVector; kwargs...)`
 
-Construct an IndexedTable array with the given indices and data. Each vector in `indices` represents the index values for one dimension. On construction, the indices and data are sorted in lexicographic order of the indices.
+Construct an NDSparse array with the given indices and data. Each vector in `indices` represents the index values for one dimension. On construction, the indices and data are sorted in lexicographic order of the indices.
 
 Keyword arguments:
 
@@ -41,7 +45,7 @@ Keyword arguments:
 * `presorted::Bool`: If true, the indices are assumed to already be sorted and no sorting is done.
 * `copy::Bool`: If true, the storage for the new array will not be shared with the passed indices and data. If false (the default), the passed arrays will be copied only if necessary for sorting. The only way to guarantee sharing of data is to pass `presorted=true`.
 """
-function IndexedTable(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false) where {T,C<:Columns}
+function NDSparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false) where {T,C<:Columns}
     length(I) == length(d) || error("index and data must have the same number of elements")
 
     if !presorted && !issorted(I)
@@ -57,34 +61,37 @@ function IndexedTable(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, 
             d = Base.copy(d)
         end
     end
-    nd = IndexedTable{T,astuple(eltype(C)),C,typeof(d)}(I, d, similar(I,0), similar(d,0))
+    p = Perm([1:length(columns(I));],  Base.OneTo(length(I)))
+
+    _table = NextTable(rows(concat_tup(columns(I), columns(d))), perms=[p])
+    nd = NDSparse{T,astuple(eltype(C)),C,typeof(d)}(_table, I, d, similar(I,0), similar(d,0))
     agg===nothing || aggregate!(agg, nd)
     return nd
 end
 
 """
-`IndexedTable(columns...; names=Symbol[...], kwargs...)`
+`NDSparse(columns...; names=Symbol[...], kwargs...)`
 
-Construct an IndexedTable array from columns. The last argument is the data column, and the rest are index columns. The `names` keyword argument optionally specifies names for the index columns (dimensions).
+Construct an NDSparse array from columns. The last argument is the data column, and the rest are index columns. The `names` keyword argument optionally specifies names for the index columns (dimensions).
 """
-function IndexedTable(columns...; names=nothing, rest...)
+function NDSparse(columns...; names=nothing, rest...)
     keys, data = columns[1:end-1], columns[end]
-    IndexedTable(Columns(keys..., names=names), data; rest...)
+    NDSparse(Columns(keys..., names=names), data; rest...)
 end
 
-similar(t::IndexedTable) = IndexedTable(similar(t.index, 0), similar(t.data, 0))
+similar(t::NDSparse) = NDSparse(similar(t.index, 0), similar(t.data, 0))
 
-function copy(t::IndexedTable)
+function copy(t::NDSparse)
     flush!(t)
-    IndexedTable(copy(t.index), copy(t.data), presorted=true)
+    NDSparse(copy(t.index), copy(t.data), presorted=true)
 end
 
-function (==)(a::IndexedTable, b::IndexedTable)
+function (==)(a::NDSparse, b::NDSparse)
     flush!(a); flush!(b)
     return a.index == b.index && a.data == b.data
 end
 
-function empty!(t::IndexedTable)
+function empty!(t::NDSparse)
     empty!(t.index)
     empty!(t.data)
     empty!(t.index_buffer)
@@ -94,18 +101,18 @@ end
 
 _convert(::Type{<:Tuple}, tup::Tuple) = tup
 _convert{T<:NamedTuple}(::Type{T}, tup::Tuple) = T(tup...)
-convertkey(t::IndexedTable{V,K,I}, tup::Tuple) where {V,K,I} = _convert(eltype(I), tup)
+convertkey(t::NDSparse{V,K,I}, tup::Tuple) where {V,K,I} = _convert(eltype(I), tup)
 
-ndims(t::IndexedTable) = length(t.index.columns)
-length(t::IndexedTable) = (flush!(t);length(t.index))
-eltype{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = T
-dimlabels{T,D,C,V}(::Type{IndexedTable{T,D,C,V}}) = fieldnames(eltype(C))
+ndims(t::NDSparse) = length(t.index.columns)
+length(t::NDSparse) = (flush!(t);length(t.index))
+eltype{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = T
+dimlabels{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = fieldnames(eltype(C))
 
 itable(keycols::Columns, valuecols::AbstractVector) =
-    IndexedTable(keycols, valuecols)
+    NDSparse(keycols, valuecols)
 
 function itable(keycols::Tup, valuecols::Tup)
-    IndexedTable(Columns(keycols), Columns(valuecols))
+    NDSparse(Columns(keycols), Columns(valuecols))
 end
 
 ### Iteration API
@@ -134,7 +141,7 @@ has_column(t::Columns, c::Int) = c <= nfields(columns(t))
 has_column(t::Columns, c::Symbol) = isa(columns(t), NamedTuple) ? haskey(columns(t), c) : false
 
 """
-`column(t::IndexedTable, which)`
+`column(t::NDSparse, which)`
 
 Returns a single column from `t`. `which` can be:
 
@@ -145,7 +152,7 @@ Returns a single column from `t`. `which` can be:
   Numbering begins from index columns and then continues
   to value columns.
 """
-function column(t::IndexedTable, n::Int)
+function column(t::NDSparse, n::Int)
     if has_column(keys(t), n)
         return column(keys(t), n)
     end
@@ -160,7 +167,7 @@ function column(t::IndexedTable, n::Int)
     error("Couldn't find column numbered $n")
 end
 
-function column(t::IndexedTable, col::Symbol)
+function column(t::NDSparse, col::Symbol)
     if has_column(keys(t), col)
         return column(keys(t), col)
     end
@@ -178,12 +185,12 @@ columns(v::AbstractVector) = (v,)
 columns(c::Columns) = c.columns
 
 """
-`columns(t::IndexedTable)`
+`columns(t::NDSparse)`
 
 Returns a tuple or named tuple of column vectors.
 It requires key and value columns to have unique names.
 """
-columns(t::IndexedTable) = concat_tup(columns(keys(t)),
+columns(t::NDSparse) = concat_tup(columns(keys(t)),
                                       columns(values(t)))
 
 _name(x::Union{Int, Symbol}) = x
@@ -196,10 +203,10 @@ function _output_tuple(which::Tuple)
     end
 end
 
-columns(t::Union{AbstractVector, IndexedTable}, which) = column(t, which)
+columns(t::Union{AbstractVector, NDSparse}, which) = column(t, which)
 
 """
-`columns(t::IndexedTable, which::Tuple)`
+`columns(t::NDSparse, which::Tuple)`
 
 Returns a subset of columns identified by `which`
 as a tuple or named tuple of vectors.
@@ -208,7 +215,7 @@ Use `as(src, dest)` in the tuple to rename a column
 from `src` to `dest`. Optionally, you can specify a
 function `f` to apply to the column: `as(f, src, dest)`.
 """
-function columns(c::Union{AbstractVector, IndexedTable}, which::Tuple)
+function columns(c::Union{AbstractVector, NDSparse}, which::Tuple)
     tupletype = _output_tuple(which)
     tupletype((column(c, w) for w in which)...)
 end
@@ -231,16 +238,16 @@ Returns an array of rows in a subset of columns in `t`
 identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
 or a tuple of these types.
 """
-rows(t::Union{AbstractVector, IndexedTable}, which...) = rows(columns(t, which...))
+rows(t::Union{AbstractVector, NDSparse}, which...) = rows(columns(t, which...))
 
 ## Row-wise iteration that acknowledges key-value nature
 
 """
-`keys(t::IndexedTable)`
+`keys(t::NDSparse)`
 
 Returns an array of the keys in `t` as tuples or named tuples.
 """
-keys(t::IndexedTable) = t.index
+keys(t::NDSparse) = t.index
 
 """
 `keys(t, which...)`
@@ -249,14 +256,14 @@ Returns a array of rows from a subset of columns
 in the index of `t`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
 or a tuple of these types.
 """
-keys(t::IndexedTable, which...) = rows(keys(t), which...)
+keys(t::NDSparse, which...) = rows(keys(t), which...)
 
 """
 `values(t)`
 
 Returns an array of values stored in `t`.
 """
-values(t::IndexedTable) = t.data
+values(t::NDSparse) = t.data
 
 """
 `values(t, which...)`
@@ -265,7 +272,7 @@ Returns a array of rows from a subset of columns
 of the values in `t`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
 or a tuple of these types.
 """
-values(t::IndexedTable, which...) = rows(values(t), which...)
+values(t::NDSparse, which...) = rows(values(t), which...)
 
 ## As
 
@@ -279,37 +286,44 @@ as(f, src, dest) = As(f, src, dest)
 as(src, dest) = as(identity, src, dest)
 
 _name(x::As) = x.dest
-function column(t::Union{IndexedTable, AbstractVector}, a::As)
+function column(t::Union{NDSparse, AbstractVector}, a::As)
     a.f(column(t, a.src))
 end
 
+# Convert an NDSparse to NextTable
+function NextTable(t::NDSparse)
+    flush!(t)
+    p = Perm([1:ndims(t);],  Base.OneTo(length(t)))
+    NextTable(rows(t), perms=[p])
+end
+
 """
-`dimlabels(t::IndexedTable)`
+`dimlabels(t::NDSparse)`
 
 Returns an array of integers or symbols giving the labels for the dimensions of `t`.
 `ndims(t) == length(dimlabels(t))`.
 """
-dimlabels(t::IndexedTable) = dimlabels(typeof(t))
+dimlabels(t::NDSparse) = dimlabels(typeof(t))
 
-start(a::IndexedTable) = start(a.data)
-next(a::IndexedTable, st) = next(a.data, st)
-done(a::IndexedTable, st) = done(a.data, st)
+start(a::NDSparse) = start(a.data)
+next(a::NDSparse, st) = next(a.data, st)
+done(a::NDSparse, st) = done(a.data, st)
 
-function permutedims(t::IndexedTable, p::AbstractVector)
+function permutedims(t::NDSparse, p::AbstractVector)
     if !(length(p) == ndims(t) && isperm(p))
         throw(ArgumentError("argument to permutedims must be a valid permutation"))
     end
     flush!(t)
-    IndexedTable(Columns(t.index.columns[p]), t.data, copy=true)
+    NDSparse(Columns(t.index.columns[p]), t.data, copy=true)
 end
 
 # showing
 
 if isless(Base.VERSION, v"0.5.0-")
-writemime(io::IO, m::MIME"text/plain", t::IndexedTable) = show(io, t)
+writemime(io::IO, m::MIME"text/plain", t::NDSparse) = show(io, t)
 end
 
-function show(io::IO, t::IndexedTable{T,D}) where {T,D<:Tuple}
+function show(io::IO, t::NDSparse{T,D}) where {T,D<:Tuple}
     flush!(t)
     n = length(t)
     n == 0 && (return print(io, "empty table $D => $T"))
@@ -356,19 +370,19 @@ function show(io::IO, t::IndexedTable{T,D}) where {T,D<:Tuple}
     end
 end
 
-abstract type SerializedIndexedTable end
+abstract type SerializedNDSparse end
 
-function serialize(s::AbstractSerializer, x::IndexedTable)
+function serialize(s::AbstractSerializer, x::NDSparse)
     flush!(x)
-    Base.Serializer.serialize_type(s, SerializedIndexedTable)
+    Base.Serializer.serialize_type(s, SerializedNDSparse)
     serialize(s, x.index)
     serialize(s, x.data)
 end
 
-function deserialize(s::AbstractSerializer, ::Type{SerializedIndexedTable})
+function deserialize(s::AbstractSerializer, ::Type{SerializedNDSparse})
     I = deserialize(s)
     d = deserialize(s)
-    IndexedTable(I, d, presorted=true)
+    NDSparse(I, d, presorted=true)
 end
 
 # map and convert
@@ -384,33 +398,33 @@ function _map(f, xs)
     end
 end
 
-function map(f, x::IndexedTable)
-    IndexedTable(copy(x.index), _map(f, x.data), presorted=true)
+function map(f, x::NDSparse)
+    NDSparse(copy(x.index), _map(f, x.data), presorted=true)
 end
 
 # lift projection on arrays of structs
-map(p::Proj, x::IndexedTable{T,D,C,V}) where {T,D<:Tuple,C<:Tup,V<:Columns} =
-    IndexedTable(x.index, p(x.data.columns), presorted=true)
+map(p::Proj, x::NDSparse{T,D,C,V}) where {T,D<:Tuple,C<:Tup,V<:Columns} =
+    NDSparse(x.index, p(x.data.columns), presorted=true)
 
-(p::Proj)(x::IndexedTable) = map(p, x)
+(p::Proj)(x::NDSparse) = map(p, x)
 
 # """
-# `columns(x::IndexedTable, names...)`
+# `columns(x::NDSparse, names...)`
 #
-# Given an IndexedTable array with multiple data columns (its data vector is a `Columns` object), return a
+# Given an NDSparse array with multiple data columns (its data vector is a `Columns` object), return a
 # new array with the specified subset of data columns. Data is shared with the original array.
 # """
-# columns(x::IndexedTable, which...) = IndexedTable(x.index, Columns(x.data.columns[[which...]]), presorted=true)
+# columns(x::NDSparse, which...) = NDSparse(x.index, Columns(x.data.columns[[which...]]), presorted=true)
 
-#columns(x::IndexedTable, which) = IndexedTable(x.index, x.data.columns[which], presorted=true)
+#columns(x::NDSparse, which) = NDSparse(x.index, x.data.columns[which], presorted=true)
 
-#column(x::IndexedTable, which) = columns(x, which)
+#column(x::NDSparse, which) = columns(x, which)
 
-# IndexedTable uses lex order, Base arrays use colex order, so we need to
+# NDSparse uses lex order, Base arrays use colex order, so we need to
 # reorder the data. transpose and permutedims are used for this.
-convert(::Type{IndexedTable}, m::SparseMatrixCSC) = IndexedTable(findnz(m.')[[2,1,3]]..., presorted=true)
+convert(::Type{NDSparse}, m::SparseMatrixCSC) = NDSparse(findnz(m.')[[2,1,3]]..., presorted=true)
 
-function convert{T}(::Type{IndexedTable}, a::AbstractArray{T})
+function convert{T}(::Type{NDSparse}, a::AbstractArray{T})
     n = length(a)
     nd = ndims(a)
     a = permutedims(a, [nd:-1:1;])
@@ -423,7 +437,7 @@ function convert{T}(::Type{IndexedTable}, a::AbstractArray{T})
         end
         i += 1
     end
-    IndexedTable(Columns(reverse(idxs)...), data, presorted=true)
+    NDSparse(Columns(reverse(idxs)...), data, presorted=true)
 end
 
 # getindex and setindex!
