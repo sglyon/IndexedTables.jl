@@ -260,3 +260,94 @@ end
     end
     ex
 end
+
+
+### Iteration API
+
+_name(x::Union{Int, Symbol}) = x
+function _output_tuple(which::Tuple)
+    names = map(_name, which)
+    if all(x->isa(x, Symbol), names)
+        return namedtuple(names...)
+    else
+        return tuple
+    end
+end
+
+"""
+`column(c::Columns, which)`
+
+Returns the column with a given name (which::Symbol)
+or at the given index (which::Int).
+"""
+@inline function column(c::Columns, x::Union{Int, Symbol})
+    getfield(c.columns, x)
+end
+
+## Extracting a single column
+
+has_column(t::Columns, c::Int) = c <= nfields(columns(t))
+has_column(t::Columns, c::Symbol) = isa(columns(t), NamedTuple) ? haskey(columns(t), c) : false
+
+function column(c::AbstractVector, x::Union{Int, Symbol})
+    if x == 1
+        return c
+    else
+        error("No column $x")
+    end
+end
+
+## Column-wise iteration:
+
+columns(v::AbstractVector) = (v,)
+columns(c::Columns) = c.columns
+columns(t::AbstractVector, which) = column(t, which)
+
+"""
+`columns(t::Columns, which::Tuple)`
+
+Returns a subset of columns identified by `which`
+as a tuple or named tuple of vectors.
+
+Use `as(src, dest)` in the tuple to rename a column
+from `src` to `dest`. Optionally, you can specify a
+function `f` to apply to the column: `as(f, src, dest)`.
+"""
+function columns(c::AbstractVector, which::Tuple)
+    tupletype = _output_tuple(which)
+    tupletype((column(c, w) for w in which)...)
+end
+
+"""
+`rows(t)`
+
+Returns an array of rows in the table `t`. Keys and values
+are merged into a contiguous tuple / named tuple.
+"""
+rows(x::AbstractVector) = x
+rows(cols::Tup) = Columns(cols)
+
+"""
+`rows(t, which)`
+
+Returns an array of rows in a subset of columns in `t`
+identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
+or a tuple of these types.
+"""
+rows(t::AbstractVector, which...) = rows(columns(t, which...))
+
+## As
+
+struct As{F}
+    f::F
+    src::Union{Int, Symbol}
+    dest::Union{Int, Symbol}
+end
+
+as(f, src, dest) = As(f, src, dest)
+as(src, dest) = as(identity, src, dest)
+
+_name(x::As) = x.dest
+function column(t::AbstractVector, a::As)
+    a.f(column(t, a.src))
+end

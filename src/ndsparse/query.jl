@@ -1,19 +1,10 @@
-filt_by_col!(f, col, indxs) = filter!(i->f(col[i]), indxs)
 
-"""
-`select(arr::NDSparse, conditions::Pair...)`
-
-Filter based on index columns. Conditions are accepted as column-function pairs.
-
-Example: `select(arr, 1 => x->x>10, 3 => x->x!=10 ...)`
-"""
 function Base.select(arr::NDSparse, conditions::Pair...)
-    flush!(arr)
     indxs = [1:length(arr);]
     for (c,f) in conditions
         filt_by_col!(f, column(arr, c), indxs)
     end
-    NDSparse(keys(arr)[indxs], values(arr)[indxs], presorted=true)
+    NDSparse(keys(arr)[indxs], values(arr)[indxs]; presorted=true)
 end
 
 """
@@ -34,14 +25,14 @@ function Base.select(arr::NDSparse, which::DimName...; agg=nothing)
 end
 
 # Filter on data field
-function Base.filter(fn::Function, arr::NDSparse)
+function Base.filter(fn::Function, arr::NDSparse; with=valueselector(arr))
     flush!(arr)
-    data = values(arr)
+    data = columns(arr, with)
     indxs = filter(i->fn(data[i]), eachindex(data))
     NDSparse(keys(arr)[indxs], data[indxs], presorted=true)
 end
 
-# aggregation
+## aggregation
 
 """
 `aggregate!(f::Function, arr::NDSparse)`
@@ -77,39 +68,18 @@ function aggregate!(f, x::NDSparse;
     x
 end
 
-function valueselector(t)
+function valueselector(t::NDSparse)
     isa(values(t), Columns) ?
         ((ndims(t) + (1:nfields(eltype(values(t)))))...) :
         ndims(t) + 1
 end
 
-function keyselector(t)
+function keyselector(t::NDSparse)
     ntuple(identity, ndims(t))
 end
 
 function Base.sortperm(t::NDSparse, by)
-    canonorder = map(i->colindex(eltype(keys(t)), eltype(t), i), by)
-
-    sorted_cols = 0
-    for (i, c) in enumerate(canonorder)
-        c != i && break
-        sorted_cols += 1
-    end
-
-    if sorted_cols == length(by)
-        # first n index columns
-        return Base.OneTo(length(t))
-    end
-
-    bycols = columns(t, by)
-    if sorted_cols > 0
-        nxtcol = bycols[sorted_cols+1]
-        p = [1:length(t);]
-        refine_perm!(p, bycols, sorted_cols, rows(t, by[1:sorted_cols]), sortproxy(nxtcol), 1, length(t))
-        return p
-    else
-        return sortperm(rows(bycols))
-    end
+    sortperm(t._table, by)
 end
 
 function aggregate(f, t::NDSparse;
