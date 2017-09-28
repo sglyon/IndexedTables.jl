@@ -169,7 +169,7 @@ end
 
 # sortperm with counting sort
 
-sortperm_fast(x; alg=MergeSort, kwargs...) = sortperm(x, alg=alg, kwargs...)
+sortperm_fast(x) = sortperm(sortproxy(x))
 
 function sortperm_fast(v::Vector{T}) where T<:Integer
     n = length(v)

@@ -91,13 +91,16 @@ function ==(x::Columns, y::Columns)
     return true
 end
 
+sortproxy(x::PooledArray) = x.refs
+sortproxy(x::AbstractArray) = x
+
 function sortperm(c::Columns)
     cols = c.columns
     x = cols[1]
     p = sortperm_fast(x)
     if length(cols) > 1
         y = cols[2]
-        refine_perm!(p, cols, 1, x, isa(y,PooledArray) ? y.refs : y, 1, length(x))
+        refine_perm!(p, cols, 1, x, sortproxy(y), 1, length(x))
     end
     return p
 end
@@ -120,7 +123,7 @@ function refine_perm!(p, cols, c, x, y, lo, hi)
             sort_sub_by!(p, i, i1, y, order, temp)
             if c < nc-1
                 z = cols[c+2]
-                refine_perm!(p, cols, c+1, y, isa(z,PooledArray) ? z.refs : z, i, i1)
+                refine_perm!(p, cols, c+1, y, sortproxy(z), i, i1)
             end
         end
         i = i1+1

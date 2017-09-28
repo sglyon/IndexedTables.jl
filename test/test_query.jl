@@ -48,11 +48,26 @@ end
                IndexedTable([:aapl,:ibm,:msft],[0,0,0],[8,9,10])) ==
                    IndexedTable([:aapl,:ibm,:msft,:msft],[1,1,1,3],[8,9,10,10])
 
+t = IndexedTable([1, 1, 1, 1, 2, 2],
+                 [2, 2, 2, 3, 3, 3],
+                 [1, 4, 3, 5, 2, 0], presorted=true)
+
+@test aggregate(max, t) == IndexedTable([1, 1, 2], [2, 3, 3], [4,5,2])
+@test aggregate(max, t, with=2) == IndexedTable([1, 1, 2], [2, 3, 3], [2,3,3])
+@test aggregate(max, t, with=column(t, 2)) == IndexedTable([1, 1, 2], [2, 3, 3], [2,3,3])
+@test aggregate(max, t, by=(2, iseven.(column(t, 3)))) == IndexedTable([2, 2, 3, 3], [false, true, false, true], [3, 4, 5, 2])
+
 @test aggregate_vec(maximum,
                     IndexedTable([1, 1, 1, 1, 1, 1],
                                  [2, 2, 2, 3, 3, 3],
                                  [1, 4, 3, 5, 2, 0], presorted=true)) ==
                     IndexedTable([1, 1], [2, 3], [4, 5])
+
+@test aggregate_vec(maximum,
+                    IndexedTable([1, 1, 1, 1, 1, 1],
+                                 [2, 2, 2, 3, 3, 3],
+                                 [1, 4, 3, 5, 2, 0], presorted=true), with=(2,3)) ==
+                    IndexedTable([1, 1], [2, 3], [(2,4), (3,5)])
 
 @test aggregate_vec([maximum, minimum],
                     IndexedTable([1, 1, 1, 1, 1, 1],
