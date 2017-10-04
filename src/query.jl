@@ -69,13 +69,20 @@ function aggregate!(f, x::IndexedTable)
 end
 
 function valueselector(t)
-    isa(values(t), Columns) ?
-        ((ndims(t) + (1:nfields(eltype(values(t)))))...) :
+    if isa(values(t), Columns)
+        T = eltype(values(t))
+        if T<:NamedTuple
+            (fieldnames(T)...)
+        else
+            ((ndims(t) + (1:nfields(eltype(values(t)))))...)
+        end
+    else
         ndims(t) + 1
+    end
 end
 
 function keyselector(t)
-    ntuple(identity, ndims(t))
+    return (dimlabels(t)...)
 end
 
 function Base.sortperm(t::IndexedTable, by)
