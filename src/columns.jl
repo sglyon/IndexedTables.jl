@@ -192,6 +192,7 @@ end
 
 @inline cmpelts(a, i, j) = (@inbounds x=cmp(a[i], a[j]); x)
 @inline copyelt!(a, i, j) = (@inbounds a[i] = a[j])
+@inline copyelt!(a, i, b, j) = (@inbounds a[i] = b[j])
 
 @inline cmpelts(a::PooledArray, i, j) = (x=cmp(a.refs[i],a.refs[j]); x)
 @inline copyelt!(a::PooledArray, i, j) = (a.refs[i] = a.refs[j])
@@ -199,6 +200,8 @@ end
 # row operations
 
 copyrow!(I::Columns, i, src) = foreach(c->copyelt!(c, i, src), I.columns)
+copyrow!(I::Columns, i, src::Columns, j) = foreach((c1,c2)->copyelt!(c1, i, c2, j), I.columns, src.columns)
+copyrow!(I::AbstractArray, i, src::AbstractArray, j) = (@inbounds I[i] = src[j])
 pushrow!(to::Columns, from::Columns, i) = foreach((a,b)->push!(a, b[i]), to.columns, from.columns)
 
 @generated function rowless{D,C}(c::Columns{D,C}, i, j)

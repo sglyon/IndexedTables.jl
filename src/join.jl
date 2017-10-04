@@ -208,20 +208,20 @@ function _merge!(K, data, x::IndexedTable, y::IndexedTable, agg)
         if i <= lI && j <= lJ
             c = rowcmp(I, i, J, j)
             if c > 0
-                K[k] = J[j]
-                data[k] = y.data[j]
+                copyrow!(K, k, J, j)
+                copyrow!(data, k, y.data, j)
                 j += 1
             elseif c < 0
-                K[k] = I[i]
-                data[k] = x.data[i]
+                copyrow!(K, k, I, i)
+                copyrow!(data, k, x.data, i)
                 i += 1
             else
-                K[k] = I[i]
+                copyrow!(K, k, I, i)
                 data[k] = x.data[i]
                 if isa(agg, Void)
                     k += 1
-                    K[k] = I[i]
-                    data[k] = y.data[j] # repeat the data
+                    copyrow!(K, k, I, i)
+                    copyrow!(data, k, y.data, j) # repeat the data
                 else
                     data[k] = agg(x.data[i], y.data[j])
                 end
@@ -230,12 +230,12 @@ function _merge!(K, data, x::IndexedTable, y::IndexedTable, agg)
             end
         elseif i <= lI
             # TODO: copy remaining data columnwise
-            K[k] = I[i]
-            data[k] = x.data[i]
+            copyrow!(K, k, I, i)
+            copyrow!(data, k, x.data, i)
             i += 1
         elseif j <= lJ
-            K[k] = J[j]
-            data[k] = y.data[j]
+            copyrow!(K, k, J, j)
+            copyrow!(data, k, y.data, j)
             j += 1
         else
             break
