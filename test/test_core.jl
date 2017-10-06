@@ -22,6 +22,9 @@ let a = Columns([1,2,1],["foo","bar","baz"]),
     bb = map(@NT(x,y), columns(a)...)
     @test isa(convert(Columns, bb), Columns)
     @test convert(Columns, bb) == Columns(x=column(a,1), y=column(a, 2))
+
+    #78
+    @test_throws ArgumentError map(x->throw(ArgumentError("x")), a)
 end
 
 let

@@ -286,7 +286,9 @@ values of type T. Nested tuples beget nested Columns.
 """
 Base.@pure function arrayof(S)
     T = strip_unionall(S)
-    if T<:Tuple
+    if T == Union{}
+        Vector{Union{}}
+    elseif T<:Tuple
         Columns{T, Tuple{map(arrayof, T.parameters)...}}
     elseif T<:NamedTuple
         Columns{T,namedtuple(fieldnames(T)...){map(arrayof, T.parameters)...}}
@@ -299,7 +301,7 @@ end
 @inline strip_unionall_params(T) = map(strip_unionall, T.parameters)
 
 Base.@pure function strip_unionall(T)
-    if isleaftype(T)
+    if isleaftype(T) || T == Union{}
         return T
     elseif T<:Tuple
         if any(x->x <: Vararg, T.parameters)
