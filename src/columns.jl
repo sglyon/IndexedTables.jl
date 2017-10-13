@@ -36,6 +36,7 @@ Columns(; pairs...) = Columns(map(x->x[2],pairs)..., names=Symbol[x[1] for x in 
 Columns(c::Tup) = Columns{eltypes(typeof(c)),typeof(c)}(c)
 
 eltype{D,C}(::Type{Columns{D,C}}) = D
+colnames(t::Columns) = fieldnames(eltype(t))
 length(c::Columns) = length(c.columns[1])
 ndims(c::Columns) = 1
 size(c::Columns) = (length(c),)
@@ -263,3 +264,144 @@ end
     end
     ex
 end
+
+function colindex(t::Columns, col::Union{Tuple, AbstractVector})
+    fns = fieldnames(eltype(t))
+    map(x -> _colindex(fns, x), col)
+end
+
+function colindex(t::Columns, col)
+    _colindex(fieldnames(eltype(t)), col)
+end
+
+function _colindex(fnames::AbstractArray, col)
+    if isa(col, Int) && 1 <= col <= length(fnames)
+        return col
+    elseif isa(col, Symbol)
+        idx = findfirst(fnames, col)
+        idx > 0 && return idx
+    elseif isa(col, As)
+        return _colindex(fnames, col.src)
+    end
+    error("column $col not found.")
+end
+
+
+### Iteration API
+
+_name(x::Union{Int, Symbol}) = x
+_name(x::AbstractArray) = 0
+
+function _output_tuple(t::Type{<:NamedTuple}, which::Tuple)
+    names = map(_name, which)
+    if all(x->isa(x, Symbol), names)
+        return namedtuple(names...)
+    else
+        return tuple
+    end
+end
+
+"""
+`column(c::Columns, which)`
+
+Returns the column with a given name (which::Symbol)
+or at the given index (which::Int).
+"""
+@inline function column(c::Columns, x::Union{Int, Symbol})
+    getfield(c.columns, x)
+end
+
+## Extracting a single column
+
+has_column(t::Columns, c::Int) = c <= nfields(columns(t))
+has_column(t::Columns, c::Symbol) = isa(columns(t), NamedTuple) ? haskey(columns(t), c) : false
+
+function column(c::AbstractVector, x::Union{Int, Symbol})
+    if x == 1
+        return c
+    else
+        error("No column $x")
+    end
+end
+
+## Column-wise iteration:
+
+columns(v::AbstractVector) = (v,)
+columns(c::Columns) = c.columns
+columns(t::AbstractVector, which) = column(t, which)
+columns(c::AbstractVector, which::Tuple) = columns(rows(columns(c)), which)
+
+"""
+`columns(t::Columns, which::Tuple)`
+
+Returns a subset of columns identified by `which`
+as a tuple or named tuple of vectors.
+
+Use `as(src, dest)` in the tuple to rename a column
+from `src` to `dest`. Optionally, you can specify a
+function `f` to apply to the column: `as(f, src, dest)`.
+"""
+function columns(c::Columns, which::Tuple)
+    cnames = colnames(c, which)
+    if all(x->isa(x, Symbol), cnames)
+        tuplewrap = namedtuple(cnames...)
+    else
+        tuplewrap = tuple
+    end
+    tuplewrap((column(c, w) for w in which)...)
+end
+
+function colnames(c, cols::Union{Tuple, AbstractArray})
+    map(x->colname(c, x), cols)
+end
+
+function colname(c::Columns, col)
+    if isa(col, Union{Int, Symbol})
+        i = colindex(c, col)
+        return fieldnames(eltype(c))[i]
+    elseif isa(col, As)
+        return col.dest
+    elseif isa(col, AbstractVector)
+        return 0
+    end
+    error("column named $col not found")
+end
+
+"""
+`rows(t)`
+
+Returns an array of rows in the table `t`. Keys and values
+are merged into a contiguous tuple / named tuple.
+"""
+rows(x::AbstractVector) = x
+rows(cols::Tup) = Columns(cols)
+
+"""
+`rows(t, which)`
+
+Returns an array of rows in a subset of columns in `t`
+identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
+or a tuple of these types.
+"""
+rows(t::AbstractVector, which...) = rows(columns(t, which...))
+
+## As
+
+struct As{F}
+    f::F
+    src::Union{Void, Int, Symbol}
+    dest::Union{Int, Symbol}
+end
+
+as(f, src, dest) = As(f, src, dest)
+as(src, dest) = as(identity, src, dest)
+as(xs::AbstractArray, dest) = as(xs, nothing, dest)
+as(name::Symbol) = x -> as(x, name)
+
+_name(x::As) = x.dest
+function column(t::AbstractVector, a::As)
+    a.f(column(t, a.src))
+end
+
+column(t::AbstractVector, a::As{<:AbstractVector}) = a.f
+column(t::AbstractVector, a::AbstractArray) = a

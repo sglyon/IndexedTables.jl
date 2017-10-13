@@ -59,11 +59,9 @@ let
 
     @test keys(x) == [@NT(a=1,b=1), @NT(a=1,b=2)]
     @test keys(x, :a) == [1, 1]
-    @test keys(x, (:a, :b, 2)) == [(1,1,1), (1,2,2)]
 
     @test values(x) == [@NT(c=3), @NT(c=4)]
     @test values(x,1) == [3,4]
-    @test values(x,(1,1)) == [(3,3), (4,4)]
     @test values(y) == [3, 4]
     @test values(y,1) == [3,4]
     @test values(y,as(reverse, 1, :x)) == [4, 3]

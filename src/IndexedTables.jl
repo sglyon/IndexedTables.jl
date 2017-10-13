@@ -114,27 +114,6 @@ end
 ## Extracting a single column
 
 """
-`column(c::Columns, which)`
-
-Returns the column with a given name (which::Symbol)
-or at the given index (which::Int).
-"""
-@inline function column(c::Columns, x::Union{Int, Symbol})
-    getfield(c.columns, x)
-end
-
-function column(c::AbstractVector, x::Union{Int, Symbol})
-    if x == 1
-        return c
-    else
-        error("No column $x")
-    end
-end
-
-has_column(t::Columns, c::Int) = c <= nfields(columns(t))
-has_column(t::Columns, c::Symbol) = isa(columns(t), NamedTuple) ? haskey(columns(t), c) : false
-
-"""
 `column(t::NDSparse, which)`
 
 Returns a single column from `t`. `which` can be:
@@ -175,9 +154,6 @@ end
 
 ## Column-wise iteration:
 
-columns(v::AbstractVector) = (v,)
-columns(c::Columns) = c.columns
-
 """
 `columns(t::NDSparse)`
 
@@ -187,8 +163,6 @@ It requires key and value columns to have unique names.
 columns(t::NDSparse) = concat_tup(columns(keys(t)),
                                       columns(values(t)))
 
-_name(x::Union{Int, Symbol}) = x
-_name(x::AbstractArray) = 0
 function _output_tuple(which::Tuple)
     names = map(_name, which)
     if all(x->isa(x, Symbol), names)
@@ -198,7 +172,7 @@ function _output_tuple(which::Tuple)
     end
 end
 
-columns(t::Union{AbstractVector, NDSparse}, which) = column(t, which)
+columns(t::NDSparse, which) = column(t, which)
 
 """
 `columns(t::NDSparse, which::Tuple)`
@@ -210,21 +184,12 @@ Use `as(src, dest)` in the tuple to rename a column
 from `src` to `dest`. Optionally, you can specify a
 function `f` to apply to the column: `as(f, src, dest)`.
 """
-function columns(c::Union{AbstractVector, NDSparse}, which::Tuple)
+function columns(c::NDSparse, which::Tuple)
     tupletype = _output_tuple(which)
     tupletype((column(c, w) for w in which)...)
 end
 
 ## Row-wise iteration
-
-"""
-`rows(t)`
-
-Returns an array of rows in the table `t`. Keys and values
-are merged into a contiguous tuple / named tuple.
-"""
-rows(x::AbstractVector) = x
-rows(cols::Tup) = Columns(cols)
 
 """
 `rows(t, which)`
@@ -233,7 +198,7 @@ Returns an array of rows in a subset of columns in `t`
 identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
 or a tuple of these types.
 """
-rows(t::Union{AbstractVector, NDSparse}, which...) = rows(columns(t, which...))
+rows(t::NDSparse, which...) = rows(columns(t, which...))
 
 ## Row-wise iteration that acknowledges key-value nature
 
@@ -269,27 +234,13 @@ or a tuple of these types.
 """
 values(t::NDSparse, which...) = rows(values(t), which...)
 
-## As
-
-struct As{F}
-    f::F
-    src::Union{Void, Int, Symbol}
-    dest::Union{Int, Symbol}
-end
-
-as(f, src, dest) = As(f, src, dest)
-as(src, dest) = as(identity, src, dest)
-as(xs::AbstractArray, dest) = as(xs, nothing, dest)
-as(name::Symbol) = x -> as(x, name)
-
-_name(x::As) = x.dest
-function column(t::Union{NDSparse, AbstractVector}, a::As)
+function column(t::NDSparse, a::As)
     a.f(column(t, a.src))
 end
-function column(t::Union{NDSparse, AbstractVector}, a::As{<:AbstractVector})
+function column(t::NDSparse, a::As{<:AbstractVector})
     a.f
 end
-function column(t::Union{NDSparse, AbstractVector}, a::AbstractArray)
+function column(t::NDSparse, a::AbstractArray)
     a
 end
 
@@ -447,5 +398,10 @@ include("query.jl")
 
 # TableTraits.jl integration
 include("tabletraits.jl")
+
+## New table type
+
+include("table/table.jl")
+include("table/query.jl")
 
 end # module
