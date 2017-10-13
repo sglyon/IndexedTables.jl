@@ -84,7 +84,7 @@ fields in the output.
 The callable is specialized to work efficiently on `Columns` by calling it once
 on `.columns` field to get the equivalent result.
 
-Calling `map` on an `IndexedTable` with a `@pick` callable will run the callable on
+Calling `map` on an `NDSparse` with a `@pick` callable will run the callable on
 the data columns.
 
 # Examples
@@ -94,7 +94,7 @@ the data columns.
     @pick(2,1)(c) == Columns([2.0], [1])
     @pick(y,x)(c) == Columns(y=[2.0], x=[1])
 
-    t = IndexedTable([1], c)
+    t = NDSparse([1], c)
     map(@pick(y, x), t) == IndexedTables([1], Columns(y=[2.0], x=[1]))
 """
 macro pick(ex...)
