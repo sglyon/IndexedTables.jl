@@ -26,7 +26,7 @@ columns.
 ## Construction
 
 The `IndexedTable` constructor accepts a series of vectors.
-The last vector contains the data values, and the first N vectors contain the
+By default the last vector contains the data values, and the first N vectors contain the
 indices for each of the N dimensions.
 The name `Table` is provided as an optional shorthand for `IndexedTable`, not
 exported by default to avoid name conflicts.
@@ -50,6 +50,18 @@ Notice that the data was sorted first by city name, then date, giving a differen
 order than we initially provided.
 On construction, `Table` takes ownership of the columns and sorts them in place
 (the original vectors are modified).
+
+More than not one would want to construct a table with multiple index columns and multiple values columns, can can achieve this by supplying two `Columns` constructor to the `IndexedTable` constructor, for example 
+
+```julia
+hitemps = IndexedTable(
+  Columns([fill("New York",3); fill("Boston",3)],
+  repmat(Date(2016,7,6):Date(2016,7,8), 2)),
+  Columns(
+  [91,89,91,95,83,76],
+  [32.78, 31.67, 32.78, 35, 28.33, 24.44])
+  )
+```
 
 ## Permuting dimensions
 
