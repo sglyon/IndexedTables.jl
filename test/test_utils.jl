@@ -52,8 +52,8 @@ let
 
     bar(i) = Union{Int, String}[1, "x"][i]
     g = x -> (x,bar(x))
-    @test _promote_op(g, Int) == Tuple{Int, Union{String, Int}}
+    @test _promote_op(g, Int) == Tuple{Int, Any}
 
     h = x -> rand(Bool) ? @NT(x=1) : @NT(y=2)
-    @test _promote_op(h, Int) == Any
+    @test _promote_op(h, Int) == NamedTuple
 end

@@ -387,7 +387,9 @@ end
     concat_tup_type(typeof(a), typeof(b))(a..., b...)
 end
 @inline concat_tup(a::Tup, b::Tup) = (a..., b...)
-@inline concat_tup(a, b) = (a, b)
+@inline concat_tup(a::Tup, b) = (a..., b)
+@inline concat_tup(a, b::Tup) = (a, b...)
+@inline concat_tup(a, b) = (a..., b...)
 
 Base.@pure function concat_tup_type(T::Type{<:Tuple}, S::Type{<:Tuple})
     Tuple{T.parameters..., S.parameters...}
@@ -395,7 +397,7 @@ end
 
 Base.@pure function concat_tup_type{
            T<:NamedTuple,S<:NamedTuple}(::Type{T}, ::Type{S})
-    namedtuple(fieldnames(T)..., fieldnames(S)...)
+    namedtuple(fieldnames(T)..., fieldnames(S)...){T.parameters..., S.parameters...}
 end
 
 Base.@pure function concat_tup_type(T::Type, S::Type)
