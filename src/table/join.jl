@@ -1,7 +1,7 @@
 using DataValues
 
 # product-join on equal lkey and rkey starting at i, j
-function joinequalblock(f, I, data, lkey, rkey, ldata, rdata, lperm, rperm, i,j)
+function joinequalblock(typ, f, I, data, lkey, rkey, ldata, rdata, lperm, rperm, i,j)
     ll = length(lkey)
     rr = length(rkey)
 
@@ -13,10 +13,12 @@ function joinequalblock(f, I, data, lkey, rkey, ldata, rdata, lperm, rperm, i,j)
     while j1 < rr && rowcmp(rkey, rperm[j1], rkey, rperm[j1+1]) == 0
         j1 += 1
     end
-    for x=i:i1
-        for y=j:j1
-            push!(I, lkey[lperm[x]])
-            push!(data, f(ldata[lperm[x]], rdata[rperm[y]]))
+    if !isa(typ, Val{:anti})
+        for x=i:i1
+            for y=j:j1
+                push!(I, lkey[lperm[x]])
+                push!(data, f(ldata[lperm[x]], rdata[rperm[y]]))
+            end
         end
     end
     return i1,j1
@@ -30,13 +32,13 @@ function _join(typ, f, I, data, lkey, rkey, ldata, rdata, lperm, rperm)
     while i <= ll && j <= rr
         c = rowcmp(lkey, lperm[i], rkey, rperm[j])
         if c < 0
-            if isa(typ, Union{Val{:outer}, Val{:left}})
+            if isa(typ, Union{Val{:outer}, Val{:left}, Val{:anti}})
                 push!(I, lkey[lperm[i]])
                 push!(data, f(ldata[lperm[i]], NA))
             end
             i += 1
         elseif c==0
-            i, j = joinequalblock(f, I, data, lkey, rkey,
+            i, j = joinequalblock(typ, f, I, data, lkey, rkey,
                                   ldata, rdata, lperm, rperm, i, j)
             i += 1
             j += 1
@@ -147,48 +149,27 @@ function outerjoin(left::NextTable, right::NextTable; kwargs...)
     outerjoin(_right, left, right; kwargs...)
 end
 
-@testset "naturaljoin" begin
-    t1 = NextTable([1,2,3,4], [5,6,7,8], primarykey=[1])
-    t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
-    t3 = NextTable([0,3,4,4], [5,6,7,8], primarykey=[1])
-    t4 = NextTable([1,3,4,4], [5,6,7,8], primarykey=[1])
-    @test naturaljoin(+, t1, t2, lselect=2, rselect=2) == NextTable([3,4], [13, 15])
-    @test naturaljoin(t1, t2, lselect=2, rselect=2) == NextTable([3,4],[7,8],[6,7])
-    @test naturaljoin(t1, t2) == NextTable([3,4],[3,4],[7,8],[3,4],[6,7])
-    @test naturaljoin(+, t1, t3, lselect=2, rselect=2) == NextTable([3,4,4], [13, 15, 16])
-    @test naturaljoin(+, t3, t4, lselect=2, rselect=2) == NextTable([3,4,4,4,4], [12, 14,15,15,16])
+function antijoin(f, left::NextTable, right::NextTable;
+                  lkey=pkeynames(left), rkey=pkeynames(right),
+                  lselect=rows(left), rselect=rows(right))
+
+    lperm = sortpermby(left, lkey)
+    rperm = sortpermby(right, rkey)
+
+    lkey = rows(left, lkey)
+    rkey = rows(right, rkey)
+
+    ldata = rows(left, lselect)
+    rdata = rows(right, rselect)
+
+    data = similar(ldata, 0)
+
+    I = _sizehint!(similar(lkey,0), length(lkey))
+    _sizehint!(data, length(lkey))
+
+    _join(Val{:anti}(), f, I, data, lkey, rkey, ldata, rdata, lperm, rperm)
 end
 
-@testset "leftjoin" begin
-    t1 = NextTable([1,2,3,4], [5,6,7,8], primarykey=[1])
-    t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
-    t3 = NextTable([0,3,4,4], [5,6,7,8], primarykey=[1])
-    t4 = NextTable([1,3,4,4], [5,6,7,8], primarykey=[1])
-
-    # default: take values from left
-    @test leftjoin(t1, t2, lselect=2, rselect=2) == NextTable([1,2,3,4], [5,6,6,7])
-
-    # null instead of missing row
-    @test leftjoin(+, t1, t2, lselect=2, rselect=2) == NextTable([1,2,3,4], [NA, NA, 13, 15])
-
-    @test leftjoin(t1, t2) == NextTable([1,2,3,4], [(1,5), (2,6), (3,6), (4,7)])
-    @test leftjoin(+, t1, t3, lselect=2, rselect=2)  == NextTable([1,2,3,4,4],[NA,NA,13,15,16])
-    @test leftjoin(+, t3, t4, lselect=2, rselect=2) == NextTable([0,3,4,4,4,4], [NA, 12, 14,15,15,16])
-end
-
-@testset "outerjoin" begin
-    t1 = NextTable([1,2,3,4], [5,6,7,8], primarykey=[1])
-    t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
-    t3 = NextTable([0,3,4,4], [5,6,7,8], primarykey=[1])
-    t4 = NextTable([1,3,4,4], [5,6,7,8], primarykey=[1])
-
-    # default: take values from left
-    @test outerjoin(t1, t2, lselect=2, rselect=2) == NextTable([0,1,2,3,4,5], [5,5,6,6,7,8])
-
-    #showl instead of missing row
-    @test outerjoin(+, t1, t2, lselect=2, rselect=2) == NextTable([0,1,2,3,4,5], [NA, NA, NA, 13, 15, NA])
-
-    @test outerjoin(t1, t2) == NextTable([0,1,2,3,4,5], [(0,5), (1,5), (2,6), (3,6), (4,7), (5,8)])
-    @test outerjoin(+, t1, t3, lselect=2, rselect=2)  == NextTable([0,1,2,3,4,4],[NA,NA,NA,13,15,16])
-    @test outerjoin(+, t3, t4, lselect=2, rselect=2) == NextTable([0,1,3,4,4,4,4], [NA, NA, 12,14,15,15,16])
+function antijoin(left::NextTable, right::NextTable; kwargs...)
+    antijoin((x,y)->x, left, right; kwargs...)
 end

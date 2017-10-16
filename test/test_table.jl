@@ -106,3 +106,56 @@ end
                 NextTable(Columns(a=[1, 1], b=[2, 3],
                                   max=[4, 5], min=[1, 0]))
 end
+
+@testset "naturaljoin" begin
+    t1 = NextTable([1,2,3,4], [5,6,7,8], primarykey=[1])
+    t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
+    t3 = NextTable([0,3,4,4], [5,6,7,8], primarykey=[1])
+    t4 = NextTable([1,3,4,4], [5,6,7,8], primarykey=[1])
+    @test naturaljoin(+, t1, t2, lselect=2, rselect=2) == NextTable([3,4], [13, 15])
+    @test naturaljoin(t1, t2, lselect=2, rselect=2) == NextTable([3,4],[7,8],[6,7])
+    @test naturaljoin(t1, t2) == NextTable([3,4],[3,4],[7,8],[3,4],[6,7])
+    @test naturaljoin(+, t1, t3, lselect=2, rselect=2) == NextTable([3,4,4], [13, 15, 16])
+    @test naturaljoin(+, t3, t4, lselect=2, rselect=2) == NextTable([3,4,4,4,4], [12, 14,15,15,16])
+end
+
+@testset "leftjoin" begin
+    t1 = NextTable([1,2,3,4], [5,6,7,8], primarykey=[1])
+    t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
+    t3 = NextTable([0,3,4,4], [5,6,7,8], primarykey=[1])
+    t4 = NextTable([1,3,4,4], [5,6,7,8], primarykey=[1])
+
+    # default: take values from left
+    @test leftjoin(t1, t2, lselect=2, rselect=2) == NextTable([1,2,3,4], [5,6,6,7])
+
+    # null instead of missing row
+    @test leftjoin(+, t1, t2, lselect=2, rselect=2) == NextTable([1,2,3,4], [NA, NA, 13, 15])
+
+    @test leftjoin(t1, t2) == NextTable([1,2,3,4], [(1,5), (2,6), (3,6), (4,7)])
+    @test leftjoin(+, t1, t3, lselect=2, rselect=2)  == NextTable([1,2,3,4,4],[NA,NA,13,15,16])
+    @test leftjoin(+, t3, t4, lselect=2, rselect=2) == NextTable([0,3,4,4,4,4], [NA, 12, 14,15,15,16])
+end
+
+@testset "outerjoin" begin
+    t1 = NextTable([1,2,3,4], [5,6,7,8], primarykey=[1])
+    t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
+    t3 = NextTable([0,3,4,4], [5,6,7,8], primarykey=[1])
+    t4 = NextTable([1,3,4,4], [5,6,7,8], primarykey=[1])
+
+    # default: take values from left
+    @test outerjoin(t1, t2, lselect=2, rselect=2) == NextTable([0,1,2,3,4,5], [5,5,6,6,7,8])
+
+    #showl instead of missing row
+    @test outerjoin(+, t1, t2, lselect=2, rselect=2) == NextTable([0,1,2,3,4,5], [NA, NA, NA, 13, 15, NA])
+
+    @test outerjoin(t1, t2) == NextTable([0,1,2,3,4,5], [(0,5), (1,5), (2,6), (3,6), (4,7), (5,8)])
+    @test outerjoin(+, t1, t3, lselect=2, rselect=2)  == NextTable([0,1,2,3,4,4],[NA,NA,NA,13,15,16])
+    @test outerjoin(+, t3, t4, lselect=2, rselect=2) == NextTable([0,1,3,4,4,4,4], [NA, NA, 12,14,15,15,16])
+end
+
+
+@testset "antijoin" begin
+    t1 = NextTable([1,2,3,4], [5,6,7,8], primarykey=[1])
+    t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
+    @test antijoin(t1, t2, lselect=2, rselect=2) == NextTable([1,2], [5,6])
+end
