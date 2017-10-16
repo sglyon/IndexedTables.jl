@@ -300,6 +300,14 @@ end
 @inline strip_unionall_params(T::UnionAll) = strip_unionall_params(T.body)
 @inline strip_unionall_params(T) = map(strip_unionall, T.parameters)
 
+Base.@pure function promote_union(T::Type)
+    if isa(T, Union)
+        return promote_type(T.a, promote_union(T.b))
+    else
+        return T
+    end
+end
+
 Base.@pure function strip_unionall(T)
     if isleaftype(T) || T == Union{}
         return T
@@ -312,14 +320,16 @@ Base.@pure function strip_unionall(T)
         end
     elseif T<:NamedTuple
         if isa(T, Union)
-            return Any
+            return promote_union(T)
         else
             NT = namedtuple(fieldnames(T)...)
             return NT{strip_unionall_params(T)...}
         end
     elseif isa(T, UnionAll)
         return Any
-    elseif isa(T, Union) || T.abstract
+    elseif isa(T, Union)
+        return promote_union(T)
+    elseif T.abstract
         return T
     else
         return Any
@@ -373,12 +383,21 @@ Base.@pure @generated function map_params{T<:NamedTuple,S<:NamedTuple}(f, ::Type
     :($NT{_map_params(f, T, S)...})
 end
 
-Base.@pure function concat_nt_type{
+@inline function concat_tup(a::NamedTuple, b::NamedTuple)
+    concat_tup_type(typeof(a), typeof(b))(a..., b...)
+end
+@inline concat_tup(a::Tup, b::Tup) = (a..., b...)
+@inline concat_tup(a, b) = (a, b)
+
+Base.@pure function concat_tup_type(T::Type{<:Tuple}, S::Type{<:Tuple})
+    Tuple{T.parameters..., S.parameters...}
+end
+
+Base.@pure function concat_tup_type{
            T<:NamedTuple,S<:NamedTuple}(::Type{T}, ::Type{S})
     namedtuple(fieldnames(T)..., fieldnames(S)...)
 end
 
-function concat_tup(a::NamedTuple, b::NamedTuple)
-    concat_nt_type(typeof(a), typeof(b))(a..., b...)
+Base.@pure function concat_tup_type(T::Type, S::Type)
+    Tuple{T,S}
 end
-concat_tup(a::Tup, b::Tup) = (a..., b...)

@@ -403,5 +403,6 @@ include("tabletraits.jl")
 
 include("table/table.jl")
 include("table/query.jl")
+include("table/join.jl")
 
 end # module

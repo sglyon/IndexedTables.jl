@@ -197,8 +197,8 @@ end
 
 function convert(::Type{NextTable},
                  key::AbstractVector,
-                 val::AbstractVector)
+                 val::AbstractVector; kwargs...)
 
     cs = Columns(concat_tup(columns(key), columns(val)))
-    NextTable(cs, primarykey=[1:nfields(eltype(key));])
+    NextTable(cs, primarykey=[1:nfields(eltype(key));]; kwargs...)
 end
