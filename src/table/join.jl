@@ -26,8 +26,13 @@ function joinequalblock(typ, grp, f, I, data, lout, rout, lkey, rkey, ldata, rda
                 end
             end
         else
-            push!(I, lkey[lperm[x]])
-            group = [f(ldata[lperm[x]], rdata[rperm[y]]) for x=i:i1, y=j:j1]
+            push!(I, lkey[lperm[i]])
+            group = similar(eltype(data), 0)
+            for x=i:i1
+                for y=j:j1
+                    push!(group, f(ldata[lperm[x]], rdata[rperm[y]]))
+                end
+            end
             push!(data, group)
         end
     end
@@ -206,7 +211,7 @@ function excludecols(t::NextTable, cols)
     (setdiff(ns, cols)...)
 end
 
-function _join(f, left::NextTable, right::NextTable;
+function Base.join(f, left::NextTable, right::NextTable;
                how=:inner, group=false,
                lkey=pkeynames(left), rkey=pkeynames(right),
                lselect=excludecols(left, lkey),
@@ -228,18 +233,24 @@ function _join(f, left::NextTable, right::NextTable;
           ldata, rdata, lperm, rperm)
 end
 
-function _join(left::NextTable, right::NextTable; kwargs...)
-    _join(_concat, left, right; kwargs...)
+function Base.join(left::NextTable, right::NextTable; kwargs...)
+    join(concat_tup, left, right; kwargs...)
 end
 
-for (fn, how) in [:naturaljoin => :inner => concat_tup,
-                  :leftjoin => :left => concat_tup,
-                  :outerjoin => :outer => concat_tup,
-                  :antijoin => :anti => (x, y) -> x]
-    how, f = how
+for (fn, how) in [:naturaljoin =>     (:inner, false, concat_tup),
+                  :leftjoin =>        (:left,  false, concat_tup),
+                  :outerjoin =>       (:outer, false, concat_tup),
+                  :antijoin =>        (:anti,  false, (x, y) -> x),
+                  :naturalgroupjoin =>(:inner, true, concat_tup),
+                  :leftgroupjoin =>   (:left,  true, concat_tup),
+                  :outergroupjoin =>  (:outer, true, concat_tup)]
+
+    how, group, f = how
+
+    @eval export $fn
 
     @eval function $fn(f, left::NextTable, right::NextTable; kwargs...)
-        _join(f, left, right; how=$(Expr(:quote, how)), kwargs...)
+        join(f, left, right; group=$group, how=$(Expr(:quote, how)), kwargs...)
     end
 
     @eval function $fn(left::NextTable, right::NextTable; kwargs...)
