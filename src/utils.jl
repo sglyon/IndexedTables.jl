@@ -292,6 +292,8 @@ Base.@pure function arrayof(S)
         Columns{T, Tuple{map(arrayof, T.parameters)...}}
     elseif T<:NamedTuple
         Columns{T,namedtuple(fieldnames(T)...){map(arrayof, T.parameters)...}}
+    elseif T<:DataValue
+        DataValueArray{T.parameters[1],1}
     else
         Vector{T}
     end
