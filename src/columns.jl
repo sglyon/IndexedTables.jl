@@ -247,6 +247,10 @@ end
     ex
 end
 
+@inline function rowcmp(c::AbstractVector, i, d::AbstractVector, j)
+    cmp(c[i], d[j])
+end
+
 # test that the row on the right is "as of" the row on the left, i.e.
 # all columns are equal except left >= right in last column.
 # Could be generalized to some number of trailing columns, but I don't
