@@ -1,7 +1,8 @@
 using DataValues
 
 # product-join on equal lkey and rkey starting at i, j
-function joinequalblock(typ, grp, f, I, data, lout, rout, lkey, rkey, ldata, rdata, lperm, rperm, i,j)
+function joinequalblock{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout, lkey, rkey,
+                        ldata, rdata, lperm, rperm, i,j)
     ll = length(lkey)
     rr = length(rkey)
 
@@ -13,13 +14,12 @@ function joinequalblock(typ, grp, f, I, data, lout, rout, lkey, rkey, ldata, rda
     while j1 < rr && rowcmp(rkey, rperm[j1], rkey, rperm[j1+1]) == 0
         j1 += 1
     end
-    if !isa(typ, Val{:anti})
-        if isa(grp, Val{false})
+    if typ !== :anti
+        if !grp
             for x=i:i1
                 for y=j:j1
                     push!(I, lkey[lperm[x]])
-                    # optimized push! method for when
-                    # concatenating
+                    # optimized push! method for concat_tup
                     _push!(Val{:both}(), f, data,
                            lout, rout, ldata, rdata,
                            lperm[x], rperm[y], NA, NA)
@@ -83,8 +83,8 @@ end
     end
 end
 
-function _join(typ, grp, f, I, data, lout, rout, lnull, rnull,
-               lkey, rkey, ldata, rdata, lperm, rperm)
+function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
+                          lnull, rnull, lkey, rkey, ldata, rdata, lperm, rperm)
 
     ll, rr = length(lkey), length(rkey)
 
@@ -93,9 +93,9 @@ function _join(typ, grp, f, I, data, lout, rout, lnull, rnull,
     while i <= ll && j <= rr
         c = rowcmp(lkey, lperm[i], rkey, rperm[j])
         if c < 0
-            if isa(typ, Union{Val{:outer}, Val{:left}, Val{:anti}})
+            if typ === :outer || typ === :left || typ === :anti
                 push!(I, lkey[lperm[i]])
-                if isa(grp, Val{true})
+                if grp
                     # empty group
                     push!(data, similar(eltype(data), 0))
                 else
@@ -105,15 +105,15 @@ function _join(typ, grp, f, I, data, lout, rout, lnull, rnull,
             end
             i += 1
         elseif c==0
-            i, j = joinequalblock(typ, grp, f, I, data, lout, rout,
+            i, j = joinequalblock(Val{typ}(), Val{grp}(), f, I, data, lout, rout,
                                   lkey, rkey, ldata, rdata, lperm, rperm,
                                   i, j)
             i += 1
             j += 1
         else
-            if isa(typ, Val{:outer})
+            if typ === :outer
                 push!(I, rkey[rperm[j]])
-                if isa(grp, Val{true})
+                if grp
                     # empty group
                     push!(data, similar(eltype(data), 0))
                 else
@@ -126,19 +126,19 @@ function _join(typ, grp, f, I, data, lout, rout, lnull, rnull,
     end
 
     # finish up
-    if !isa(typ, Val{:inner})
-        if isa(typ, Union{Val{:left}, Val{:anti}, Val{:outer}}) && i <= ll
+    if typ !== :inner
+        if (typ === :outer || typ === :left || typ === :anti) && i <= ll
             append!(I, lkey[i:ll])
-            if isa(grp, Val{true})
+            if grp
                 # empty group
                 append!(data, fill(similar(eltype(data), 0), length(i:ll)))
             else
                 _append!(Val{:left}(), f, data, lout, rout,
                        ldata, rdata, lperm[i:ll], 0, lnull, rnull)
             end
-        elseif isa(typ, Val{:outer}) && j <= rr
+        elseif typ === :outer && j <= rr
             append!(I, rkey[j:rr])
-            if isa(grp, Val{true})
+            if grp
                 # empty group
                 append!(data, fill(similar(eltype(data), 0), length(j:rr)))
             else
@@ -153,7 +153,7 @@ end
 
 nullrow(t::Type{<:Tuple}) = tuple(map(x->x(), [t.parameters...])...)
 nullrow(t::Type{<:NamedTuple}) = t(map(x->x(), [t.parameters...])...)
-nullrow(t::Type) = t()
+nullrow(t::Type{<:DataValue}) = t()
 
 function _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
     lnull = nothing
@@ -162,6 +162,7 @@ function _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
     routput = nothing
 
     if isa(grp, Val{false})
+
         if isa(typ, Union{Val{:left}, Val{:inner}, Val{:anti}})
             # left cannot be null in these joins
             left_type = eltype(ldata)
@@ -169,6 +170,7 @@ function _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
             left_type = map_params(x->DataValue{x}, eltype(ldata))
             lnull = nullrow(left_type)
         end
+
         if isa(typ, Val{:inner})
             # right cannot be null in innnerjoin
             right_type = eltype(rdata)
@@ -212,13 +214,14 @@ function excludecols(t::NextTable, cols)
 end
 
 function Base.join(f, left::NextTable, right::NextTable;
-               how=:inner, group=false,
-               lkey=pkeynames(left), rkey=pkeynames(right),
-               lselect=excludecols(left, lkey),
-               rselect=excludecols(right, rkey))
+                   how=:inner, group=false,
+                   lkey=pkeynames(left), rkey=pkeynames(right),
+                   lselect=excludecols(left, lkey),
+                   rselect=excludecols(right, rkey),
+                   cache=true)
 
-    lperm = sortpermby(left, lkey)
-    rperm = sortpermby(right, rkey)
+    lperm = sortpermby(left, lkey; cache=cache)
+    rperm = sortpermby(right, rkey; cache=cache)
 
     lkey = rows(left, lkey)
     rkey = rows(right, rkey)
@@ -229,8 +232,8 @@ function Base.join(f, left::NextTable, right::NextTable;
     typ, grp = Val{how}(), Val{group}()
     I, data, lout, rout, lnull, rnull = _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
 
-    _join(typ, grp, f, I, data, lout, rout, lnull, rnull, lkey, rkey,
-          ldata, rdata, lperm, rperm)
+    _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
+           lkey, rkey, ldata, rdata, lperm, rperm)
 end
 
 function Base.join(left::NextTable, right::NextTable; kwargs...)
