@@ -17,12 +17,19 @@ const DimName = Union{Int,Symbol}
 include("utils.jl")
 include("columns.jl")
 
+include("table/table.jl")
+
 struct NDSparse{T, D<:Tuple, C<:Columns, V<:AbstractVector}
     index::C
     data::V
+    _table::NextTable
 
     index_buffer::C
     data_buffer::V
+end
+
+function NextTable(nds::NDSparse; kwargs...)
+    convert(NextTable, nds.index, nds.data; kwargs...)
 end
 
 Base.@deprecate_binding IndexedTable NDSparse
@@ -58,10 +65,36 @@ function NDSparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy
             d = Base.copy(d)
         end
     end
-    nd = NDSparse{T,astuple(eltype(C)),C,typeof(d)}(I, d, similar(I,0), similar(d,0))
+    stripnames(x) = rows(astuple(columns(x)))
+    _table = convert(NextTable, stripnames(I), stripnames(d); presorted=true, copy=false)
+    nd = NDSparse{T,astuple(eltype(C)),C,typeof(d)}(I, d, _table, similar(I,0), similar(d,0))
     agg===nothing || aggregate!(agg, nd)
     return nd
 end
+
+const TableLike = Union{NextTable, NDSparse}
+
+# no-copy convert
+_convert(::Type{NextTable}, x::NextTable) = x
+function _convert(::Type{NDSparse}, t::NextTable)
+    NDSparse(rows(t, pkeynames(t)), rows(t, excludecols(t, pkeynames(t))),
+             copy=false, presorted=true)
+end
+
+function _convert(::Type{NextTable}, x::NDSparse)
+    convert(NextTable, x.index, x.data; presorted=true, copy=false)
+end
+
+Base.@pure function colnames(t::NDSparse)
+    dnames = colnames(t.data)
+    if all(x->isa(x, Integer), dnames)
+        dnames = map(x->x+ncols(t.index), dnames)
+    end
+    vcat(colnames(t.index), dnames)
+end
+
+include("table/query.jl")
+include("table/join.jl")
 
 """
 `NDSparse(columns...; names=Symbol[...], kwargs...)`
@@ -106,7 +139,7 @@ itable(keycols::Columns, valuecols::AbstractVector) =
     NDSparse(keycols, valuecols)
 
 function itable(keycols::Tup, valuecols::Tup)
-    NDSparse(Columns(keycols), Columns(valuecols))
+    NDSparse(rows(keycols), rows(valuecols))
 end
 
 ### Iteration API
@@ -400,9 +433,5 @@ include("query.jl")
 include("tabletraits.jl")
 
 ## New table type
-
-include("table/table.jl")
-include("table/query.jl")
-include("table/join.jl")
 
 end # module
