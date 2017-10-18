@@ -35,8 +35,17 @@ Columns(; pairs...) = Columns(map(x->x[2],pairs)..., names=Symbol[x[1] for x in 
 
 Columns(c::Tup) = Columns{eltypes(typeof(c)),typeof(c)}(c)
 
+# IndexedTable-like API
+
+Base.@pure colnames(t::AbstractVector) = [1]
+columns(v::AbstractVector) = (v,)
+
+Base.@pure colnames(t::Columns) = fieldnames(eltype(t))
+columns(c::Columns) = c.columns
+
+# Array-like API
+
 eltype{D,C}(::Type{Columns{D,C}}) = D
-colnames(t::Columns) = fieldnames(eltype(t))
 length(c::Columns) = length(c.columns[1])
 ndims(c::Columns) = 1
 ncols(c::Columns) = nfields(typeof(c.columns))
@@ -272,13 +281,32 @@ end
     ex
 end
 
-function colindex(t::Columns, col::Union{Tuple, AbstractVector})
-    fns = fieldnames(eltype(t))
+## As
+
+struct As{F}
+    f::F
+    src::Union{Void, Int, Symbol}
+    dest::Union{Int, Symbol}
+end
+
+as(f, src, dest) = As(f, src, dest)
+as(src, dest) = as(identity, src, dest)
+as(xs::AbstractArray, dest) = as(xs, nothing, dest)
+as(name::Symbol) = x -> as(x, name)
+
+
+### Iteration API
+
+# For `columns(t, names)` and `rows(t, ...)` to work, `t`
+# needs to support `colnames` and `columns(t)`
+
+Base.@pure function colindex(t, col::Union{Tuple, AbstractArray})
+    fns = colnames(t)
     map(x -> _colindex(fns, x), col)
 end
 
-function colindex(t::Columns, col)
-    _colindex(fieldnames(eltype(t)), col)
+Base.@pure function colindex(t, col)
+    _colindex(colnames(t), col)
 end
 
 function _colindex(fnames::AbstractArray, col)
@@ -293,50 +321,25 @@ function _colindex(fnames::AbstractArray, col)
     error("column $col not found.")
 end
 
-
-### Iteration API
-
-_name(x::Union{Int, Symbol}) = x
-_name(x::AbstractArray) = 0
-
-function _output_tuple(t::Type{<:NamedTuple}, which::Tuple)
-    names = map(_name, which)
-    if all(x->isa(x, Symbol), names)
-        return namedtuple(names...)
-    else
-        return tuple
-    end
-end
-
 """
-`column(c::Columns, which)`
+`column(c, which)`
 
 Returns the column with a given name (which::Symbol)
 or at the given index (which::Int).
 """
+column(c, x) = columns(c)[colindex(c, x)]
+
+# optimized method
 @inline function column(c::Columns, x::Union{Int, Symbol})
     getfield(c.columns, x)
 end
 
-## Extracting a single column
-
-has_column(t::Columns, c::Int) = c <= nfields(columns(t))
-has_column(t::Columns, c::Symbol) = isa(columns(t), NamedTuple) ? haskey(columns(t), c) : false
-
-function column(c::AbstractVector, x::Union{Int, Symbol})
-    if x == 1
-        return c
-    else
-        error("No column $x")
-    end
+function column(t, a::As)
+    a.f(column(t, a.src))
 end
 
-## Column-wise iteration:
-
-columns(v::AbstractVector) = (v,)
-columns(c::Columns) = c.columns
-columns(t::AbstractVector, which) = column(t, which)
-columns(c::AbstractVector, which::Tuple) = columns(rows(columns(c)), which)
+column(t, a::As{<:AbstractVector}) = a.f
+column(t, a::AbstractArray) = a
 
 """
 `columns(t::Columns, which::Tuple)`
@@ -348,7 +351,7 @@ Use `as(src, dest)` in the tuple to rename a column
 from `src` to `dest`. Optionally, you can specify a
 function `f` to apply to the column: `as(f, src, dest)`.
 """
-function columns(c::Columns, which::Tuple)
+function columns(c, which::Tuple)
     cnames = colnames(c, which)
     if all(x->isa(x, Symbol), cnames)
         tuplewrap = namedtuple(cnames...)
@@ -357,15 +360,16 @@ function columns(c::Columns, which::Tuple)
     end
     tuplewrap((column(c, w) for w in which)...)
 end
+columns(t, which) = column(t, which)
 
 function colnames(c, cols::Union{Tuple, AbstractArray})
     map(x->colname(c, x), cols)
 end
 
-function colname(c::Columns, col)
+function colname(c, col)
     if isa(col, Union{Int, Symbol})
         i = colindex(c, col)
-        return fieldnames(eltype(c))[i]
+        return colnames(c)[i]
     elseif isa(col, As)
         return col.dest
     elseif isa(col, AbstractVector)
@@ -390,25 +394,4 @@ Returns an array of rows in a subset of columns in `t`
 identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
 or a tuple of these types.
 """
-rows(t::AbstractVector, which...) = rows(columns(t, which...))
-
-## As
-
-struct As{F}
-    f::F
-    src::Union{Void, Int, Symbol}
-    dest::Union{Int, Symbol}
-end
-
-as(f, src, dest) = As(f, src, dest)
-as(src, dest) = as(identity, src, dest)
-as(xs::AbstractArray, dest) = as(xs, nothing, dest)
-as(name::Symbol) = x -> as(x, name)
-
-_name(x::As) = x.dest
-function column(t::AbstractVector, a::As)
-    a.f(column(t, a.src))
-end
-
-column(t::AbstractVector, a::As{<:AbstractVector}) = a.f
-column(t::AbstractVector, a::AbstractArray) = a
+rows(t, which...) = rows(columns(t, which...))

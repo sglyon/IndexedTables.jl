@@ -72,7 +72,19 @@ function NDSparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy
     return nd
 end
 
-const TableLike = Union{NextTable, NDSparse}
+# IndexedTable API
+Base.@pure function colnames(t::NDSparse)
+    dnames = colnames(t.data)
+    if all(x->isa(x, Integer), dnames)
+        dnames = map(x->x+ncols(t.index), dnames)
+    end
+    vcat(colnames(t.index), dnames)
+end
+
+permscache(t::NDSparse) = permscache(t._table)
+pushperm!(t::NDSparse, p) = pushperm!(t._table, p)
+
+# End IndexedTable API
 
 # no-copy convert
 _convert(::Type{NextTable}, x::NextTable) = x
@@ -82,16 +94,11 @@ function _convert(::Type{NDSparse}, t::NextTable)
 end
 
 function _convert(::Type{NextTable}, x::NDSparse)
-    convert(NextTable, x.index, x.data; presorted=true, copy=false)
+    convert(NextTable, x.index, x.data;
+            perms=x._table.perms,
+            presorted=true, copy=false)
 end
 
-Base.@pure function colnames(t::NDSparse)
-    dnames = colnames(t.data)
-    if all(x->isa(x, Integer), dnames)
-        dnames = map(x->x+ncols(t.index), dnames)
-    end
-    vcat(colnames(t.index), dnames)
-end
 
 include("table/query.jl")
 include("table/join.jl")
@@ -144,94 +151,7 @@ end
 
 ### Iteration API
 
-## Extracting a single column
-
-"""
-`column(t::NDSparse, which)`
-
-Returns a single column from `t`. `which` can be:
-
-- `Symbol`: returns the column with the given name.
-  If the same name appears in keys and values,
-  the keys column is returned.
-- `Int`: returns the column with the given number.
-  Numbering begins from index columns and then continues
-  to value columns.
-"""
-function column(t::NDSparse, n::Int)
-    if has_column(keys(t), n)
-        return column(keys(t), n)
-    end
-
-    n = n - length(keys(t).columns)
-    if isa(values(t), Columns) && has_column(values(t), n)
-        return column(values(t), n)
-    elseif n == 1
-        return values(t)
-    end
-
-    error("Couldn't find column numbered $n")
-end
-
-function column(t::NDSparse, col::Symbol)
-    if has_column(keys(t), col)
-        return column(keys(t), col)
-    end
-
-    if has_column(values(t), col)
-        return column(values(t), col)
-    end
-
-    error("Couldn't find column named $col")
-end
-
-## Column-wise iteration:
-
-"""
-`columns(t::NDSparse)`
-
-Returns a tuple or named tuple of column vectors.
-It requires key and value columns to have unique names.
-"""
-columns(t::NDSparse) = concat_tup(columns(keys(t)),
-                                      columns(values(t)))
-
-function _output_tuple(which::Tuple)
-    names = map(_name, which)
-    if all(x->isa(x, Symbol), names)
-        return namedtuple(names...)
-    else
-        return tuple
-    end
-end
-
-columns(t::NDSparse, which) = column(t, which)
-
-"""
-`columns(t::NDSparse, which::Tuple)`
-
-Returns a subset of columns identified by `which`
-as a tuple or named tuple of vectors.
-
-Use `as(src, dest)` in the tuple to rename a column
-from `src` to `dest`. Optionally, you can specify a
-function `f` to apply to the column: `as(f, src, dest)`.
-"""
-function columns(c::NDSparse, which::Tuple)
-    tupletype = _output_tuple(which)
-    tupletype((column(c, w) for w in which)...)
-end
-
-## Row-wise iteration
-
-"""
-`rows(t, which)`
-
-Returns an array of rows in a subset of columns in `t`
-identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
-or a tuple of these types.
-"""
-rows(t::NDSparse, which...) = rows(columns(t, which...))
+columns(nd::NDSparse) = concat_tup(columns(nd.index), columns(nd.data))
 
 ## Row-wise iteration that acknowledges key-value nature
 

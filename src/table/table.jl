@@ -96,15 +96,13 @@ function NextTable(t::NextTable;
 
 end
 
+Base.@pure colnames(t::AbstractIndexedTable) = fieldnames(eltype(t))
+columns(t::NextTable) = columns(t.columns)
+
 Base.eltype(t::NextTable) = eltype(t.columns)
-colnames(t::AbstractIndexedTable) = fieldnames(eltype(t))
-colindex(t::NextTable, col) = colindex(t.columns, col)
 Base.copy(t::NextTable) = NextTable(t)
 Base.:(==)(a::NextTable, b::NextTable) = rows(a) == rows(b)
 
-columns(t::NextTable, args...) = columns(t.columns, args...)
-column(t::NextTable, args...) = column(t.columns, args...)
-rows(t::NextTable, args...) = rows(t.columns, args...)
 Base.getindex(t::NextTable, i::Integer) = getindex(t.columns, i)
 
 Base.length(t::NextTable) = length(t.columns)
