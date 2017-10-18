@@ -1,118 +1,43 @@
 export naturaljoin, innerjoin, leftjoin, asofjoin, leftjoin!
 
+function Base.join(f, left::NDSparse, right::NDSparse;
+                   how=:inner, group=false,
+                   lkey=pkeynames(left), rkey=pkeynames(right),
+                   lselect=valueselector(left),
+                   rselect=valueselector(right),
+                   cache=true)
+
+    lperm = sortpermby(left, lkey; cache=cache)
+    rperm = sortpermby(right, rkey; cache=cache)
+
+    lkey = rows(left, lkey)
+    rkey = rows(right, rkey)
+
+    ldata = rows(left, lselect)
+    rdata = rows(right, rselect)
+
+    typ, grp = Val{how}(), Val{group}()
+    I, data, lout, rout, lnull, rnull = _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
+
+    _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
+           lkey, rkey, ldata, rdata, lperm, rperm)
+
+    NDSparse(I, data, presorted=true, copy=false)
+end
+
 ## Joins
 
 # Natural Join (Both NDSParse arrays must have the same number of columns, in the same order)
 
-function naturaljoin(left::NDSparse, right::NDSparse, op)
-    lD, rD = left.data, right.data
-    _naturaljoin(left, right, op, similar(lD, typeof(op(lD[1],rD[1])), 0))
-end
+Base.@deprecate naturaljoin(left::NDSparse, right::NDSparse, op::Function) naturaljoin(op, left::NDSparse, right::NDSparse)
 
 const innerjoin = naturaljoin
 
-combine_op(a, b) = tuple
-combine_op(a::Columns, b::Columns) = (l, r)->(l..., r...)
-combine_op(a, b::Columns) = (l, r)->(l, r...)
-combine_op(a::Columns, b) = (l, r)->(l..., r)
-similarz(a) = similar(a,0)
-
-function naturaljoin(left::NDSparse, right::NDSparse)
-    lD, rD = left.data, right.data
-    op = combine_op(lD, rD)
-    cols(v) = (v,)
-    cols(v::Columns) = v.columns
-    _naturaljoin(left, right, op, Columns((map(similarz,cols(lD))...,map(similarz,cols(rD))...)))
-end
-
-function _naturaljoin(left::NDSparse, right::NDSparse, op, data)
-    flush!(left); flush!(right)
-    lI, rI = left.index, right.index
-    lD, rD = left.data, right.data
-    ll, rr = length(lI), length(rI)
-
-    # Guess the length of the result
-    guess = min(ll, rr)
-
-    # Initialize output array components
-    I = _sizehint!(similar(lI,0), guess)
-    _sizehint!(data, guess)
-
-    # Match and insert rows
-    i = j = 1
-
-    while i <= ll && j <= rr
-        c = rowcmp(lI, i, rI, j)
-        if c == 0
-            push!(I, lI[i])
-            push!(data, op(lD[i], rD[j]))
-            i += 1
-            j += 1
-        elseif c < 0
-            i += 1
-        else
-            j += 1
-        end
-    end
-
-    # Generate final datastructure
-    NDSparse(I, data, presorted=true)
-end
-
-map(f, x::NDSparse{T,D}, y::NDSparse{S,D}) where {T,S,D} = naturaljoin(x, y, f)
+map(f, x::NDSparse{T,D}, y::NDSparse{S,D}) where {T,S,D} = naturaljoin(f, x, y)
 
 # left join
 
-function leftjoin(left::NDSparse, right::NDSparse, op = IndexedTables.right)
-    flush!(left); flush!(right)
-    lI, rI = left.index, right.index
-    lD, rD = left.data, right.data
-    ll, rr = length(lI), length(rI)
-
-    data = similar(lD)
-
-    i = j = 1
-
-    while i <= ll && j <= rr
-        c = rowcmp(lI, i, rI, j)
-        if c < 0
-            @inbounds data[i] = lD[i]
-            i += 1
-        elseif c == 0
-            @inbounds data[i] = op(lD[i], rD[j])
-            i += 1
-            j += 1
-        else
-            j += 1
-        end
-    end
-    data[i:ll] = lD[i:ll]
-
-    NDSparse(copy(lI), data, presorted=true)
-end
-
-function leftjoin!(left::NDSparse, right::NDSparse, op = IndexedTables.right)
-    flush!(left); flush!(right)
-    lI, rI = left.index, right.index
-    lD, rD = left.data, right.data
-    ll, rr = length(lI), length(rI)
-
-    i = j = 1
-
-    while i <= ll && j <= rr
-        c = rowcmp(lI, i, rI, j)
-        if c < 0
-            i += 1
-        elseif c == 0
-            @inbounds lD[i] = op(lD[i], rD[j])
-            i += 1
-            j += 1
-        else
-            j += 1
-        end
-    end
-    left
-end
+Base.@deprecate leftjoin(left::NDSparse, right::NDSparse, op::Function) leftjoin(op, left, right)
 
 # asof join
 

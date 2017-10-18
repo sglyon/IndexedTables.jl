@@ -1,6 +1,7 @@
 using Base.Test
 using IndexedTables
 using PooledArrays
+using DataValues
 
 let a = NDSparse([12,21,32], [52,41,34], [11,53,150]), b = NDSparse([12,23,32], [52,43,34], [56,13,10])
     c = naturaljoin(a, b, +)
@@ -30,11 +31,11 @@ end
 
 @test leftjoin(NDSparse([1,1,1,2], [2,3,4,4], [5,6,7,8]),
                NDSparse([1,1,3],   [2,4,4],   [9,10,12])) ==
-                   NDSparse([1,1,1,2], [2,3,4,4], [9, 6, 10, 8])
+    NDSparse([1,1,1,2], [2,3,4,4], Columns([5, 6, 7, 8], [9, NA, 10, NA]))
 
 @test leftjoin(NDSparse([1,1,1,2], [2,3,4,4], [5,6,7,8]),
                NDSparse([1,1,2],   [2,4,4],   [9,10,12])) ==
-                   NDSparse([1,1,1,2], [2,3,4,4], [9, 6, 10, 12])
+    NDSparse([1,1,1,2], [2,3,4,4], Columns([5, 6, 7, 8], [9, NA, 10, 12]))
 
 @test asofjoin(NDSparse([:msft,:ibm,:ge], [1,3,4], [100,200,150]),
                NDSparse([:ibm,:msft,:msft,:ibm], [0,0,0,2], [100,99,101,98])) ==

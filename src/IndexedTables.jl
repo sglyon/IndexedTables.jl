@@ -27,8 +27,8 @@ const TableTrait = Union{AbstractVector, NextTable, NDSparse}
 
 # These support `colnames`, `columns`,
 # `pkeynames`, `permcache`, `cacheperm!`
-const IndexedTrait = Union{NextTable, NDSparse}
 =#
+const IndexedTrait = Union{NextTable, NDSparse}
 
 include("sortperm.jl")
 

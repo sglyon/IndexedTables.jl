@@ -147,8 +147,6 @@ function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
             end
         end
     end
-
-    convert(NextTable, I, data, presorted=true)
 end
 
 nullrow(t::Type{<:Tuple}) = tuple(map(x->x(), [t.parameters...])...)
@@ -234,6 +232,8 @@ function Base.join(f, left::NextTable, right::NextTable;
 
     _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
            lkey, rkey, ldata, rdata, lperm, rperm)
+
+    convert(NextTable, I, data, presorted=true, copy=false)
 end
 
 function Base.join(left::NextTable, right::NextTable; kwargs...)
@@ -252,11 +252,11 @@ for (fn, how) in [:naturaljoin =>     (:inner, false, concat_tup),
 
     @eval export $fn
 
-    @eval function $fn(f, left::NextTable, right::NextTable; kwargs...)
+    @eval function $fn(f, left::IndexedTrait, right::IndexedTrait; kwargs...)
         join(f, left, right; group=$group, how=$(Expr(:quote, how)), kwargs...)
     end
 
-    @eval function $fn(left::NextTable, right::NextTable; kwargs...)
+    @eval function $fn(left::IndexedTrait, right::IndexedTrait; kwargs...)
         $fn($f, left, right; kwargs...)
     end
 end
