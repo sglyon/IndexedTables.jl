@@ -10,11 +10,10 @@ Example: `select(arr, 1 => x->x>10, 3 => x->x!=10 ...)`
 function Base.select(arr::NDSparse, conditions::Pair...)
     flush!(arr)
     indxs = [1:length(arr);]
-    cols = arr.index.columns
     for (c,f) in conditions
-        filt_by_col!(f, cols[c], indxs)
+        filt_by_col!(f, column(arr, c), indxs)
     end
-    NDSparse(Columns(map(x->x[indxs], cols)), arr.data[indxs], presorted=true)
+    NDSparse(arr.index[indxs], arr.data[indxs], presorted=true)
 end
 
 """
@@ -81,185 +80,54 @@ function valueselector(t)
     end
 end
 
-function keyselector(t)
-    return (dimlabels(t)...)
+function groupreduce(f, t::NDSparse, by=pkeynames(t);
+                     select=valueselector(t), name=nothing)
+
+    key  = rows(t, by)
+    data = rows(t, select)
+    perm = sortpermby(t, by)
+
+    dest_key = similar(key, 0)
+    dest_data = similar(data, 0)
+
+    groupreduce_to!(f, key, data, dest_key, dest_data, perm)
+
+    NDSparse(dest_key, dest_data; presorted=true, copy=false)
 end
 
-function Base.sortperm(t::NDSparse, by)
-    canonorder = map(i->colindex(eltype(keys(t)), eltype(t), i), by)
-
-    sorted_cols = 0
-    for (i, c) in enumerate(canonorder)
-        c != i && break
-        sorted_cols += 1
-    end
-
-    if sorted_cols == length(by)
-        # first n index columns
-        return Base.OneTo(length(t))
-    end
-
-    bycols = columns(t, by)
-    if sorted_cols > 0
-        nxtcol = bycols[sorted_cols+1]
-        p = [1:length(t);]
-        refine_perm!(p, bycols, sorted_cols, rows(t, by[1:sorted_cols]), sortproxy(nxtcol), 1, length(t))
-        return p
-    else
-        return sortperm(rows(bycols))
-    end
-end
-
-function aggregate(f, t::NDSparse;
-                   by = keyselector(t),
-                   with = valueselector(t),
-                   presorted=false)
-    bycol = rows(t, by)
-    perm = presorted ? Base.OneTo(length(bycol)) : sortperm(t, by)
-    NDSparse(aggregate_to(f, bycol, rows(t, with), perm)...; presorted=true)
-end
-
-function colindex(K, V, col)
-    if isa(col, Int) && 1 <= col <= nfields(K) + nfields(V)
-        return col
-    elseif isa(col, Symbol)
-        if col in fieldnames(K)
-            return findfirst(fieldnames(K), col)
-        elseif col in fieldnames(V)
-            return nfields(K) + findfirst(fieldnames(V), col)
-        end
-    elseif isa(col, As)
-        return colindex(K, V, col.src)
-    elseif isa(col, AbstractArray)
-        return 0
-    end
-    error("column $col not found.")
-end
-
-# aggregate out of place, building up new indexes and data
-function aggregate_to(f, src_idxs, src_data, perm=Base.OneTo(length(src_idxs)))
-    dest_idxs, dest_data = similar(src_idxs,0), similar(src_data,0)
-    n = length(src_idxs)
-    i1 = 1
-    while i1 <= n
-        val = src_data[perm[i1]]
-        i = i1+1
-        while i <= n && roweq(src_idxs, perm[i], perm[i1])
-            val = f(val, src_data[perm[i]])
-            i += 1
-        end
-        push!(dest_idxs, src_idxs[perm[i1]])
-        push!(dest_data, val)
-        i1 = i
-    end
-    dest_idxs, dest_data
-end
-
-# out of place vector aggregation
-function aggregate_vec_to(f, src_idxs, src_data, perm=Base.OneTo(length(src_idxs)))
-    n = length(src_idxs)
-    dest_idxs = similar(src_idxs,0)
-    local newdata
-    newlen = 0
-    i1 = 1
-    while i1 <= n
-        i = i1+1
-        while i <= n && roweq(src_idxs, perm[i], perm[i1])
-            i += 1
-        end
-        val = f(src_data[perm[i1:(i-1)]])
-        if newlen == 0
-            newdata = [val]
-            if isa(val, Tup)
-                newdata = convert(Columns, newdata)
-            end
-        else
-            push!(newdata, val)
-        end
-        newlen += 1
-        push!(dest_idxs, src_idxs[perm[i1]])
-        i1 = i
-    end
-    (dest_idxs, (newlen==0 ? Union{}[] : newdata))
-end
-
-# vector aggregation, not modifying or computing new indexes. only returns new data.
-function _aggregate_vec(f, idxs, data, perm)
-    n = length(idxs)
-    local newdata
-    newlen = 0
-    i1 = 1
-    while i1 <= n
-        i = i1+1
-        while i <= n && roweq(idxs, perm[i], perm[i1])
-            i += 1
-        end
-        val = f(data[perm[i1:(i-1)]])
-        if newlen == 0
-            newdata = [val]
-            if isa(val, Tup)
-                newdata = convert(Columns, newdata)
-            end
-        else
-            push!(newdata, val)
-        end
-        newlen += 1
-        i1 = i
-    end
-    newlen==0 ? Union{}[] : newdata
-end
-
-function _aggregate_vec(ks, vs, names, funs, perm)
-    n = length(funs)
-    n == 0 && return NDSparse(ks, vs, presorted=true)
-    n != length(names) && return NDSparse(ks, vs, presorted=true)
-    datacols = Any[ _aggregate_vec(funs[i], ks, vs, perm) for i = 1:n-1 ]
-    idx, lastcol = aggregate_vec_to(funs[n], ks, vs)
-    NDSparse(idx, Columns(datacols..., lastcol, names = names), presorted=true)
-end
+Base.@deprecate aggregate(f, t;
+                          by=pkeynames(t),
+                          with=valueselector(t)) groupreduce(f, t, by; select=with)
 
 
 """
-`aggregate_vec(f::Function, x::NDSparse)`
+`groupby(f::Function, x::NDSparse)`
 
 Combine adjacent rows with equal indices using a function from vector to scalar,
 e.g. `mean`.
 """
-function aggregate_vec(f, x::NDSparse;
-                       by=keyselector(x),
-                       with=valueselector(x),
-                       presorted=false)
+function groupby(f, x::NDSparse, by=pkeynames(x);
+                     select=valueselector(x), name=nothing)
 
-    perm = presorted ? Base.OneTo(length(x)) : sortperm(x, by)
-    idxs, data = aggregate_vec_to(f, rows(x, by), rows(x, with), perm)
+    if isa(f, AbstractVector)
+        T = isa(name, AbstractVector) ?
+            namedtuple(name...) : namedtuple(map(Symbol, f)...)
+
+        f = T(f...)
+    end
+
+    perm = sortpermby(x, by)
+    idxs, data = _groupby(f, rows(x, by), rows(x, select), perm)
     NDSparse(idxs, data, presorted=true, copy=false)
 end
 
-"""
-`aggregate_vec(f::Vector{Function}, x::NDSparse)`
+Base.@deprecate aggregate_vec(
+    fs, x::NDSparse;
+    names=nothing,
+    by=pkeynames(x),
+    with=valueselector(x)) groupby(fs, x; name=names, select=with)
 
-Combine adjacent rows with equal indices using multiple functions from vector to scalar.
-The result has multiple data columns, one for each function, named based on the functions.
-"""
-function aggregate_vec(fs::Vector, x::NDSparse;
-                       names=map(Symbol, fs),
-                       by=keyselector(x),
-                       with=valueselector(x),
-                       presorted=false)
-
-    perm = presorted ? Base.OneTo(length(x)) : sortperm(x, by)
-    _aggregate_vec(rows(x, by), rows(x, with), names, fs, perm)
-end
-
-"""
-`aggregate_vec(x::NDSparse; funs...)`
-
-Combine adjacent rows with equal indices using multiple functions from vector to scalar.
-The result has multiple data columns, one for each function provided by `funs`.
-"""
-function aggregate_vec(t::NDSparse; funs...)
-    aggregate_vec([x[2] for x in funs], t, names = [x[1] for x in funs])
-end
+Base.@deprecate aggregate_vec(t::NDSparse; funs...) groupby(namedtuple(first.(funs)...)(last.(funs)...), t)
 
 
 """
@@ -285,7 +153,7 @@ function convertdim(x::NDSparse, d::DimName, xlat; agg=nothing, vecagg=nothing, 
     end
     if vecagg !== nothing
         y = NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, copy=false, names=names)
-        idxs, data = aggregate_vec_to(vecagg, y.index, y.data)
+        idxs, data = _groupby(vecagg, y.index, y.data, Base.OneTo(length(x)))
         return NDSparse(idxs, data, copy=false)
     end
     NDSparse(cols[1:n-1]..., d2, cols[n+1:end]..., x.data, agg=agg, copy=true, names=names)
@@ -318,7 +186,7 @@ function reducedim_vec(f, x::NDSparse, dims; with=valueselector(x))
     if isempty(keep)
         throw(ArgumentError("to remove all dimensions, use `reduce(f, A)`"))
     end
-    idxs, d = aggregate_vec_to(f, keys(x, (keep...)), columns(x, with), sortperm(x, (keep...)))
+    idxs, d = _groupby(f, keys(x, (keep...)), columns(x, with), sortpermby(x, (keep...)))
     NDSparse(idxs, d, presorted=true, copy=false)
 end
 

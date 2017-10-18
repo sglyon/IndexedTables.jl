@@ -300,7 +300,7 @@ as(name::Symbol) = x -> as(x, name)
 # For `columns(t, names)` and `rows(t, ...)` to work, `t`
 # needs to support `colnames` and `columns(t)`
 
-Base.@pure function colindex(t, col::Union{Tuple, AbstractArray})
+Base.@pure function colindex(t, col::Tuple)
     fns = colnames(t)
     map(x -> _colindex(fns, x), col)
 end
@@ -317,6 +317,8 @@ function _colindex(fnames::AbstractArray, col)
         idx > 0 && return idx
     elseif isa(col, As)
         return _colindex(fnames, col.src)
+    elseif isa(col, AbstractArray)
+        return 0
     end
     error("column $col not found.")
 end
@@ -368,6 +370,7 @@ end
 
 function colname(c, col)
     if isa(col, Union{Int, Symbol})
+        col == 0 && return 0
         i = colindex(c, col)
         return colnames(c)[i]
     elseif isa(col, As)

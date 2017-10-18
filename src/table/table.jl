@@ -42,6 +42,8 @@ function NextTable(cs::Columns;
 
     if isa(primarykey, Union{Int, Symbol})
         primarykey = [primarykey]
+    elseif isa(primarykey, Tuple)
+        primarykey = [primarykey...]
     end
 
     if !presorted && !isempty(primarykey)
@@ -60,7 +62,7 @@ function NextTable(cs::Columns;
         cs = Base.copy(cs)
     end
 
-    intprimarykey = [colindex(cs, primarykey)...]
+    intprimarykey = map(k->colindex(cs, k), primarykey)
 
     NextTable{typeof(cs)}(cs,
            intprimarykey,
@@ -71,7 +73,7 @@ end
 
 using Base.Test
 
-function NextTable(cols...;
+function NextTable(cols::AbstractArray...;
                    names=nothing,
                    kwargs...)
 
@@ -125,6 +127,9 @@ function primaryperm(t::NextTable)
     Perm(t.primarykey, Base.OneTo(length(t)))
 end
 
+permcache(t::NextTable) = [primaryperm(t), t.perms;]
+cacheperm!(t::NextTable, p) = push!(t.perms, p)
+
 function pkeynames(t::NextTable)
     if eltype(t) <: NamedTuple
         (colnames(t)[t.primarykey]...)
@@ -134,64 +139,6 @@ function pkeynames(t::NextTable)
 end
 
 primarykeys(t::NextTable) = rows(t, pkeynames(t))
-
-function sortpermby(t::NextTable, by; cache=true)
-    canonorder = colindex(t, by)
-    canonorder_vec = Int[canonorder...]
-    perms = [primaryperm(t), t.perms;]
-    matched_cols, partial_perm = best_perm_estimate(perms, canonorder_vec)
-
-    if matched_cols == length(by)
-        # first n index columns
-        return partial_perm
-    end
-
-    bycols = columns(t, canonorder)
-    perm = if matched_cols > 0
-        nxtcol = bycols[matched_cols+1]
-        p = convert(Array{UInt32}, partial_perm)
-        refine_perm!(p, bycols, matched_cols,
-                     rows(t, canonorder[1:matched_cols]),
-                     sortproxy(nxtcol), 1, length(t))
-        p
-    else
-        sortperm(rows(bycols))
-    end
-    if cache
-        push!(t.perms, Perm(canonorder_vec, perm))
-    end
-
-    return perm
-end
-
-function sortpermby(t::NextTable, by::AbstractArray; cache=true)
-    sortperm(by)
-end
-
-"""
-Returns: (n, perm) where n is the number of columns in
-the beginning of `cols`, `perm` is one possible permutation of those
-first `n` columns.
-"""
-function best_perm_estimate(perms, cols)
-    bestperm = nothing
-    bestmatch = 0
-    for p in perms
-        matched_cols = 0
-        l = min(length(cols), length(p.columns))
-        for i in 1:l
-            cols[i] != p.columns[i] && break
-            matched_cols += 1
-        end
-        if matched_cols == length(cols)
-            return (matched_cols, p.perm)
-        elseif bestmatch < matched_cols
-            bestmatch = matched_cols
-            bestperm = p.perm
-        end
-    end
-    return (bestmatch, bestperm)
-end
 
 function convert(::Type{NextTable},
                  key::AbstractVector,

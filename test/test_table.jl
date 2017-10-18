@@ -84,7 +84,7 @@ end
 end
 
 @testset "groupreduce" begin
-    a = NextTable([1, 1, 2], [2, 3, 3], [4, 5, 2], primarykey=(1,2))
+    a = NextTable([1, 1, 2], [2, 3, 3], [4, 5, 2], primarykey=[1,2])
     b = NextTable(Columns(a=[1, 1, 2], b=[3, 2, 2], c=[4, 5, 2]), primarykey=(1,2))
 
     @test groupreduce(min, a, select=3) == a
