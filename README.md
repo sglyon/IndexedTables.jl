@@ -51,7 +51,7 @@ order than we initially provided.
 On construction, `Table` takes ownership of the columns and sorts them in place
 (the original vectors are modified).
 
-More than not one would want to construct a table with multiple index columns and multiple values columns, can can achieve this by supplying two `Columns` constructor to the `IndexedTable` constructor, for example 
+More often than not one would want to construct a table with multiple index columns and multiple values columns, one can achieve this by supplying two `Columns` constructors to the `IndexedTable` constructor, for example 
 
 ```julia
 hitemps = IndexedTable(
