@@ -2,7 +2,7 @@ using DataValues
 
 # product-join on equal lkey and rkey starting at i, j
 function joinequalblock{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout, lkey, rkey,
-                        ldata, rdata, lperm, rperm, i,j)
+                        ldata, rdata, lperm, rperm, init_group, accumulate, i,j)
     ll = length(lkey)
     rr = length(rkey)
 
@@ -27,10 +27,10 @@ function joinequalblock{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout
             end
         else
             push!(I, lkey[lperm[i]])
-            group = similar(eltype(data), 0)
+            group = init_group()
             for x=i:i1
                 for y=j:j1
-                    push!(group, f(ldata[lperm[x]], rdata[rperm[y]]))
+                    group = accumulate(group, f(ldata[lperm[x]], rdata[rperm[y]]))
                 end
             end
             push!(data, group)
@@ -84,7 +84,7 @@ end
 end
 
 function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
-                          lnull, rnull, lkey, rkey, ldata, rdata, lperm, rperm)
+                          lnull, rnull, lkey, rkey, ldata, rdata, lperm, rperm, init_group, accumulate)
 
     ll, rr = length(lkey), length(rkey)
 
@@ -97,7 +97,7 @@ function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
                 push!(I, lkey[lperm[i]])
                 if grp
                     # empty group
-                    push!(data, similar(eltype(data), 0))
+                    push!(data, init_group())
                 else
                     _push!(Val{:left}(), f, data, lout, rout,
                            ldata, rdata, lperm[i], 0, lnull, rnull)
@@ -107,6 +107,7 @@ function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
         elseif c==0
             i, j = joinequalblock(Val{typ}(), Val{grp}(), f, I, data, lout, rout,
                                   lkey, rkey, ldata, rdata, lperm, rperm,
+                                  init_group, accumulate,
                                   i, j)
             i += 1
             j += 1
@@ -115,7 +116,7 @@ function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
                 push!(I, rkey[rperm[j]])
                 if grp
                     # empty group
-                    push!(data, similar(eltype(data), 0))
+                    push!(data, init_group())
                 else
                     _push!(Val{:right}(), f, data, lout, rout,
                            ldata, rdata, 0, rperm[j], lnull, rnull)
@@ -131,7 +132,7 @@ function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
             append!(I, lkey[i:ll])
             if grp
                 # empty group
-                append!(data, fill(similar(eltype(data), 0), length(i:ll)))
+                append!(data, map(x->init_group(), i:ll))
             else
                 _append!(Val{:left}(), f, data, lout, rout,
                        ldata, rdata, lperm[i:ll], 0, lnull, rnull)
@@ -140,7 +141,7 @@ function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
             append!(I, rkey[j:rr])
             if grp
                 # empty group
-                append!(data, fill(similar(eltype(data), 0), length(j:rr)))
+                append!(data, map(x->init_group(), j:rr))
             else
                 _append!(Val{:right}(), f, data, lout, rout,
                        ldata, rdata, 0, rperm[j:rr], lnull, rnull)
@@ -153,7 +154,7 @@ nullrow(t::Type{<:Tuple}) = tuple(map(x->x(), [t.parameters...])...)
 nullrow(t::Type{<:NamedTuple}) = t(map(x->x(), [t.parameters...])...)
 nullrow(t::Type{<:DataValue}) = t()
 
-function _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
+function _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
     lnull = nothing
     rnull = nothing
     loutput = nothing
@@ -192,7 +193,14 @@ function _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
         left_type = eltype(ldata)
         right_type = eltype(rdata)
         out_type = _promote_op(f, left_type, right_type)
-        data = similar(arrayof(arrayof(out_type)), 0)
+        if init_group === nothing
+            init_group = () -> similar(arrayof(out_type), 0)
+        end
+        if accumulate === nothing
+            accumulate = push!
+        end
+        group_type = _promote_op(accumulate, typeof(init_group()), out_type)
+        data = similar(arrayof(group_type), 0)
     end
     
     if isa(typ, Val{:inner})
@@ -201,7 +209,7 @@ function _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
         guess = length(lkey)
     end
 
-    _sizehint!(similar(lkey,0), guess), _sizehint!(data, guess), loutput, routput, lnull, rnull
+    _sizehint!(similar(lkey,0), guess), _sizehint!(data, guess), loutput, routput, lnull, rnull, init_group, accumulate
 end
 
 function excludecols(t::NextTable, cols)
@@ -216,6 +224,8 @@ function Base.join(f, left::NextTable, right::NextTable;
                    lkey=pkeynames(left), rkey=pkeynames(right),
                    lselect=excludecols(left, lkey),
                    rselect=excludecols(right, rkey),
+                   init_group=nothing,
+                   accumulate=nothing,
                    cache=true)
 
     lperm = sortpermby(left, lkey; cache=cache)
@@ -228,10 +238,10 @@ function Base.join(f, left::NextTable, right::NextTable;
     rdata = rows(right, rselect)
 
     typ, grp = Val{how}(), Val{group}()
-    I, data, lout, rout, lnull, rnull = _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
+    I, data, lout, rout, lnull, rnull, init_group, accumulate = _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
 
     _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
-           lkey, rkey, ldata, rdata, lperm, rperm)
+           lkey, rkey, ldata, rdata, lperm, rperm, init_group, accumulate)
 
     convert(NextTable, I, data, presorted=true, copy=false)
 end

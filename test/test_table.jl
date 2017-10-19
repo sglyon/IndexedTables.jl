@@ -165,3 +165,10 @@ end
     t2 = NextTable([0,3,4,5], [5,6,7,8], primarykey=[1])
     @test antijoin(t1, t2, lselect=2, rselect=2) == NextTable([1,2], [5,6])
 end
+
+@testset "groupjoin" begin
+    t = NextTable([0,1,2,2], [0,1,2,3])
+    t2 = NextTable([1,2,2,3],[4,5,6,7])
+    @test outergroupjoin(t, t2, lkey=1, rkey=1) == NextTable([0,1,2,3], [[],[(1,4)], [(2,5), (2,6), (3,5), (3,6)], []])
+    @test outergroupjoin(-,t, t2, lkey=1, rkey=1, lselect=2,rselect=2, init_group=()->0, accumulate=min) == NextTable([0,1,2,3], [0, -3, -4, 0])
+end

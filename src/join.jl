@@ -5,6 +5,8 @@ function Base.join(f, left::NDSparse, right::NDSparse;
                    lkey=pkeynames(left), rkey=pkeynames(right),
                    lselect=valueselector(left),
                    rselect=valueselector(right),
+                   init_group=nothing,
+                   accumulate=nothing,
                    cache=true)
 
     lperm = sortpermby(left, lkey; cache=cache)
@@ -17,10 +19,12 @@ function Base.join(f, left::NDSparse, right::NDSparse;
     rdata = rows(right, rselect)
 
     typ, grp = Val{how}(), Val{group}()
-    I, data, lout, rout, lnull, rnull = _init_output(typ, grp, f, ldata, rdata, lkey, rkey)
+
+    I, data, lout, rout, lnull, rnull, init_group, accumulate =
+        _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
 
     _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
-           lkey, rkey, ldata, rdata, lperm, rperm)
+           lkey, rkey, ldata, rdata, lperm, rperm, init_group, accumulate)
 
     NDSparse(I, data, presorted=true, copy=false)
 end
