@@ -1,4 +1,4 @@
-export NextTable, colnames
+export NextTable, colnames, columns, reindex
 
 """
 A permutation
@@ -140,10 +140,21 @@ end
 
 primarykeys(t::NextTable) = rows(t, pkeynames(t))
 
+function excludecols(t::NextTable, cols)
+    ns = colnames(t)
+    cols = Iterators.filter(c->c in ns || isa(c, Integer),
+                  map(x->isa(x, As) ? x.src : x, cols))
+    (setdiff(ns, cols)...)
+end
+
 function convert(::Type{NextTable},
                  key::AbstractVector,
                  val::AbstractVector; kwargs...)
 
     cs = Columns(concat_tup(columns(key), columns(val)))
     NextTable(cs, primarykey=[1:ncols(key);]; kwargs...)
+end
+
+function reindex(t::NextTable, by=pkeynames(t), select=excludecols(t, by); kwargs...)
+    convert(NextTable, rows(t, by), rows(t, select); kwargs...)
 end

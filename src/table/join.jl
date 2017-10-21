@@ -212,13 +212,6 @@ function _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumul
     _sizehint!(similar(lkey,0), guess), _sizehint!(data, guess), loutput, routput, lnull, rnull, init_group, accumulate
 end
 
-function excludecols(t::NextTable, cols)
-    ns = colnames(t)
-    cols = Iterators.filter(c->c in ns || isa(c, Integer),
-                  map(x->isa(x, As) ? x.src : x, cols))
-    (setdiff(ns, cols)...)
-end
-
 function Base.join(f, left::NextTable, right::NextTable;
                    how=:inner, group=false,
                    lkey=pkeynames(left), rkey=pkeynames(right),
