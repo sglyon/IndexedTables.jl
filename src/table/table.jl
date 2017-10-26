@@ -158,3 +158,63 @@ end
 function reindex(t::NextTable, by=pkeynames(t), select=excludecols(t, by); kwargs...)
     convert(NextTable, rows(t, by), rows(t, select); kwargs...)
 end
+
+# showing
+
+import Base.Markdown.with_output_format
+
+function showtable(io::IO, t, typ, cnames=colnames(t), divider=nothing, cstyle=[])
+    height, width = displaysize(io) 
+    showrows = height-6
+    n = length(t)
+    cnames = map(string, cnames)
+    n == 0 && (return print(io, "empty table $(typ)"))
+    lastfew = div(showrows, 2)
+    firstfew = showrows - lastfew
+    rows = n > showrows ? [1:firstfew; (n-lastfew+1):n] : [1:n;]
+    nc = length(columns(t))
+    reprs  = [ sprint(io->showcompact(io,columns(t)[j][i])) for i in rows, j in 1:nc ]
+    widths  = [ max(strwidth(get(cnames, c, "")), maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
+    for c in 1:nc
+        nm = get(cnames, c, "")
+        style = get(cstyle, c, nothing)
+        txt = c==nc ? nm : rpad(nm, widths[c]+(c==divider ? 1 : 2), " ")
+        if style == nothing
+            print(io, txt)
+        else
+            with_output_format(style, print, io, txt)
+        end
+        if c == divider
+            print(io, "│")
+            length(cnames) > divider && print(io, " ")
+        end
+    end
+    println(io)
+    if divider !== nothing
+        print(io, "─"^(sum(widths[1:divider])+2*divider-1), "┼", "─"^(sum(widths[divider+1:end])+2*(nc-divider)-1))
+    else
+        print(io, "─"^(sum(widths)+2*nc-2))
+    end
+    for r in 1:size(reprs,1)
+        println(io)
+        for c in 1:nc
+            print(io, c==nc ? reprs[r,c] : rpad(reprs[r,c], widths[c]+(c==divider ? 1 : 2), " "))
+            if c == divider
+                print(io, "│ ")
+            end
+        end
+        if n > showrows && r == firstfew
+            if divider === nothing
+                println(io)
+            else
+                println(io)
+                print(io, " "^(sum(widths[1:divider]) + 2*divider-1), "⋮")
+            end
+        end
+    end
+end
+
+function show(io::IO, t::NextTable{T}) where {T}
+    cstyle = Dict([i=>:bold for i in t.primarykey])
+    showtable(io, rows(t), "$T", colnames(t), nothing, cstyle)
+end

@@ -11,6 +11,8 @@ function NextTable(nds::NDSparse; kwargs...)
     convert(NextTable, nds.index, nds.data; kwargs...)
 end
 
+convert(::Type{NextTable}, nd::NDSparse) = NextTable(nd)
+
 Base.@deprecate_binding IndexedTable NDSparse
 
 # optional, non-exported name
@@ -178,51 +180,15 @@ end
 
 # showing
 
-function show(io::IO, t::NDSparse{T,D}) where {T,D<:Tuple}
+import Base.show
+function show(io::IO, t::NDSparse{T,D}) where {T,D}
     flush!(t)
-    n = length(t)
-    n == 0 && (return print(io, "empty table $D => $T"))
-    rows = n > 20 ? [1:min(n,10); (n-9):n] : [1:n;]
-    nc = length(t.index.columns)
-    reprs  = [ sprint(io->showcompact(io,t.index.columns[j][i])) for i in rows, j in 1:nc ]
-    if isa(t.data, Columns)
-        dreprs = [ sprint(io->showcompact(io,t.data[i][j])) for i in rows, j in 1:nfields(eltype(t.data)) ]
+    if !(values(t) isa Columns)
+        cnames = colnames(keys(t))
     else
-        dreprs = [ sprint(io->showcompact(io,t.data[i])) for i in rows ]
+        cnames = colnames(t)
     end
-    ndc = size(dreprs,2)
-    inames = isa(t.index.columns, NamedTuple) ? map(string,keys(t.index.columns)) : fill("", nc)
-    dnames = eltype(t.data) <: NamedTuple ? map(string,fieldnames(eltype(t.data))) : fill("", ndc)
-    widths  = [ max(strwidth(inames[c]), maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
-    dwidths = [ max(strwidth(dnames[c]), maximum(map(strwidth, dreprs[:,c]))) for c in 1:ndc ]
-    if isa(t.index.columns, NamedTuple) || (isa(t.data, Columns) && isa(t.data.columns, NamedTuple))
-        for c in 1:nc
-            print(io, rpad(inames[c], widths[c]+(c==nc ? 1 : 2), " "))
-        end
-        print(io, "│ ")
-        for c in 1:ndc
-            print(io, c==ndc ? dnames[c] : rpad(dnames[c], dwidths[c]+2, " "))
-        end
-        println(io)
-        print(io, "─"^(sum(widths)+2*nc-1), "┼", "─"^(sum(dwidths)+2*ndc-1))
-    else
-        print(io, "─"^(sum(widths)+2*nc-1), "┬", "─"^(sum(dwidths)+2*ndc-1))
-    end
-    for r in 1:size(reprs,1)
-        println(io)
-        for c in 1:nc
-            print(io, rpad(reprs[r,c], widths[c]+(c==nc ? 1 : 2), " "))
-        end
-        print(io, "│ ")
-        for c in 1:ndc
-            print(io, c==ndc ? dreprs[r,c] : rpad(dreprs[r,c], dwidths[c]+2, " "))
-        end
-        if n > 20 && r == 10
-            println(io)
-            print(io, " "^(sum(widths)+2*nc-1))
-            print(io, "⋮")
-        end
-    end
+    showtable(io, rows(t), "$T => $D", cnames, length(columns(keys(t))))
 end
 
 abstract type SerializedNDSparse end
