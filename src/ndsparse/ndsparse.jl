@@ -185,10 +185,42 @@ function show(io::IO, t::NDSparse{T,D}) where {T,D}
     flush!(t)
     if !(values(t) isa Columns)
         cnames = colnames(keys(t))
+        eltypeheader = "$(eltype(t))"
     else
         cnames = colnames(t)
+        nf = nfields(eltype(t))
+        if eltype(t) <: NamedTuple
+            eltypeheader = "$(nf) field named tuples"
+        else
+            eltypeheader = "$(nf)-tuples"
+        end
     end
-    showtable(io, rows(t), "$T => $D", cnames, length(columns(keys(t))))
+    header = "$(ndims(t))-d NDSparse with $(length(t)) values (" * eltypeheader * "):"
+    showtable(io, t; header=header,
+              cnames=cnames, divider=length(columns(keys(t))))
+end
+
+import Base: @md_str
+
+function showmeta(io, t::NDSparse, cnames)
+    nc = length(columns(t))
+    nidx = length(columns(keys(t)))
+    nkeys = length(columns(values(t)))
+
+    print(io,"    ")
+    with_output_format(:underline, println, io, "Dimensions")
+    metat = Columns(([1:nidx;], [Text(get(cnames, i, "<noname>")) for i in 1:nidx],
+                     eltype.([columns(keys(t))...])))
+    showtable(io, metat, cnames=["#", "colname", "type"], cstyle=fill(:bold, nc), full=true)
+    print(io,"\n    ")
+    with_output_format(:underline, println, io, "Values")
+    if isa(values(t), Columns)
+        metat = Columns(([nidx+1:nkeys+nidx;], [Text(get(cnames, i, "<noname>")) for i in nidx+1:nkeys+nidx],
+                         eltype.([columns(values(t))...])))
+        showtable(io, metat, cnames=["#", "colname", "type"], cstyle=fill(:bold, nc), full=true)
+    else
+        show(io, eltype(values(t)))
+    end
 end
 
 abstract type SerializedNDSparse end

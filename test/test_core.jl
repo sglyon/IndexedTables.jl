@@ -319,6 +319,7 @@ end
 
 # test showing
 @test repr(NDSparse([1,2,3],[3,2,1],Float64[4,5,6])) == """
+2-d NDSparse with 3 values (Float64):
 1  2 │
 ─────┼────
 1  3 │ 4.0
@@ -326,6 +327,7 @@ end
 3  1 │ 6.0"""
 
 @test repr(NDSparse(Columns(a=[1,2,3],test=[3,2,1]),Float64[4,5,6])) == """
+2-d NDSparse with 3 values (Float64):
 a  test │
 ────────┼────
 1  3    │ 4.0
@@ -333,6 +335,7 @@ a  test │
 3  1    │ 6.0"""
 
 @test repr(NDSparse(Columns(a=[1,2,3],test=[3,2,1]),Columns(x=Float64[4,5,6],y=[9,8,7]))) == """
+2-d NDSparse with 3 values (2 field named tuples):
 a  test │ x    y
 ────────┼───────
 1  3    │ 4.0  9
@@ -340,13 +343,15 @@ a  test │ x    y
 3  1    │ 6.0  7"""
 
 @test repr(NDSparse([1,2,3],[3,2,1],Columns(x=Float64[4,5,6],y=[9,8,7]))) == """
+2-d NDSparse with 3 values (2 field named tuples):
 1  2 │ x    y
 ─────┼───────
 1  3 │ 4.0  9
 2  2 │ 5.0  8
 3  1 │ 6.0  7"""
 
-@test repr(NDSparse([1:19;],ones(Int,19))) == """
+@test repr(NDSparse([1:18;],ones(Int,18))) == """
+1-d NDSparse with 18 values (Int64):
 1  │
 ───┼──
 1  │ 1
@@ -366,9 +371,16 @@ a  test │ x    y
 15 │ 1
 16 │ 1
 17 │ 1
-18 │ 1
-19 │ 1"""
+18 │ 1"""
 
+function foo(n, data=ones(Int, 1))
+    t=IndexedTables.namedtuple((Symbol("x$i") for i=1:n)...)
+    NDSparse(Columns(t([ones(Int, 1) for i=1:n]...)), data)
+end
+
+@test repr(foo(18)) == "18-d NDSparse with 1 values (Int64):\n    \e[4mDimensions\n\e[24m\e[1m#   \e[22m\e[1mcolname  \e[22m\e[1mtype\e[22m\n──────────────────\n1   x1       Int64\n2   x2       Int64\n3   x3       Int64\n4   x4       Int64\n5   x5       Int64\n6   x6       Int64\n7   x7       Int64\n8   x8       Int64\n9   x9       Int64\n10  x10      Int64\n11  x11      Int64\n12  x12      Int64\n13  x13      Int64\n14  x14      Int64\n15  x15      Int64\n16  x16      Int64\n17  x17      Int64\n18  x18      Int64\n    \e[4mValues\n\e[24mInt64"
+
+@test repr(foo(17, Columns(x=ones(Int, 1), y=ones(Int, 1)))) == "17-d NDSparse with 1 values (2 field named tuples):\n    \e[4mDimensions\n\e[24m\e[1m#   \e[22m\e[1mcolname  \e[22m\e[1mtype\e[22m\n──────────────────\n1   x1       Int64\n2   x2       Int64\n3   x3       Int64\n4   x4       Int64\n5   x5       Int64\n6   x6       Int64\n7   x7       Int64\n8   x8       Int64\n9   x9       Int64\n10  x10      Int64\n11  x11      Int64\n12  x12      Int64\n13  x13      Int64\n14  x14      Int64\n15  x15      Int64\n16  x16      Int64\n17  x17      Int64\n    \e[4mValues\n\e[24m\e[1m#   \e[22m\e[1mcolname  \e[22m\e[1mtype\e[22m\n──────────────────\n18  x        Int64\n19  y        Int64"
 let x = Columns([6,5,4,3,2,2,1],[4,4,4,4,4,4,4],[1,2,3,4,5,6,7])
     @test issorted(x[sortperm(x)])
 end

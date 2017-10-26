@@ -163,20 +163,28 @@ end
 
 import Base.Markdown.with_output_format
 
-function showtable(io::IO, t, typ, cnames=colnames(t), divider=nothing, cstyle=[])
+function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothing, cstyle=[], full=false)
     height, width = displaysize(io) 
-    showrows = height-6
+    showrows = height-6 - (header !== nothing)
     n = length(t)
-    cnames = map(string, cnames)
-    n == 0 && (return print(io, "empty table $(typ)"))
+    header !== nothing && println(io, header)
     lastfew = div(showrows, 2)
     firstfew = showrows - lastfew
-    rows = n > showrows ? [1:firstfew; (n-lastfew+1):n] : [1:n;]
+    if full
+        rows = [1:n;]
+        showrows = n
+    else
+        rows = n > showrows ? [1:firstfew; (n-lastfew+1):n] : [1:n;]
+    end
     nc = length(columns(t))
     reprs  = [ sprint(io->showcompact(io,columns(t)[j][i])) for i in rows, j in 1:nc ]
-    widths  = [ max(strwidth(get(cnames, c, "")), maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
+    strcnames = map(string, cnames)
+    widths  = [ max(strwidth(get(strcnames, c, "")), maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
+    if sum(widths) + 2*nc > width
+        return showmeta(io, t, cnames)
+    end
     for c in 1:nc
-        nm = get(cnames, c, "")
+        nm = get(strcnames, c, "")
         style = get(cstyle, c, nothing)
         txt = c==nc ? nm : rpad(nm, widths[c]+(c==divider ? 1 : 2), " ")
         if style == nothing
@@ -206,6 +214,7 @@ function showtable(io::IO, t, typ, cnames=colnames(t), divider=nothing, cstyle=[
         if n > showrows && r == firstfew
             if divider === nothing
                 println(io)
+                print(io, "⋮")
             else
                 println(io)
                 print(io, " "^(sum(widths[1:divider]) + 2*divider-1), "⋮")
@@ -214,7 +223,16 @@ function showtable(io::IO, t, typ, cnames=colnames(t), divider=nothing, cstyle=[
     end
 end
 
+function showmeta(io, t, cnames)
+    nc = length(columns(t))
+    println(io, "Columns:")
+    metat = Columns(([1:nc;], [Text(string(get(cnames, i, "<noname>"))) for i in 1:nc],
+                       eltype.([columns(t)...])))
+    showtable(io, metat, cnames=["#", "colname", "type"], cstyle=fill(:bold, nc), full=true)
+end
+
 function show(io::IO, t::NextTable{T}) where {T}
+    header = "NextTable with $(length(t)) rows, $(length(columns(t))) columns:"
     cstyle = Dict([i=>:bold for i in t.primarykey])
-    showtable(io, rows(t), "$T", colnames(t), nothing, cstyle)
+    showtable(io, t, header=header, cstyle=cstyle)
 end
