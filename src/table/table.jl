@@ -1,4 +1,4 @@
-export NextTable, colnames, columns, reindex
+export NextTable, colnames, columns, reindex, primarykeys
 
 """
 A permutation
@@ -123,6 +123,8 @@ function getindex(t::NextTable, idxs::AbstractVector{<:Integer})
     end
 end
 
+subtable(t::NextTable, r) = t[r]
+
 function primaryperm(t::NextTable)
     Perm(t.primarykey, Base.OneTo(length(t)))
 end
@@ -138,7 +140,13 @@ function pkeynames(t::NextTable)
     end
 end
 
-primarykeys(t::NextTable) = rows(t, pkeynames(t))
+function primarykeys(t::NextTable)
+    if isempty(t.primarykey)
+        Columns(Base.OneTo(length(t)))
+    else
+        rows(t, pkeynames(t))
+    end
+end
 
 function excludecols(t::NextTable, cols)
     ns = colnames(t)
