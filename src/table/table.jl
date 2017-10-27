@@ -171,23 +171,30 @@ end
 
 import Base.Markdown.with_output_format
 
-function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothing, cstyle=[], full=false)
+function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothing, cstyle=[], full=false, ellipsis=:middle)
     height, width = displaysize(io) 
-    showrows = height-6 - (header !== nothing)
+    showrows = height-5 - (header !== nothing)
     n = length(t)
     header !== nothing && println(io, header)
-    lastfew = div(showrows, 2)
-    firstfew = showrows - lastfew
     if full
         rows = [1:n;]
         showrows = n
     else
-        rows = n > showrows ? [1:firstfew; (n-lastfew+1):n] : [1:n;]
+        if ellipsis == :middle
+            lastfew = div(showrows, 2) - 1
+            firstfew = showrows - lastfew - 1
+            rows = n > showrows ? [1:firstfew; (n-lastfew+1):n] : [1:n;]
+        elseif ellipsis == :end
+            rows = n == showrows ?
+                [1:showrows;] : [1:showrows-1;]
+        else
+            error("ellipsis must be either :middle or :end")
+        end
     end
     nc = length(columns(t))
     reprs  = [ sprint(io->showcompact(io,columns(t)[j][i])) for i in rows, j in 1:nc ]
     strcnames = map(string, cnames)
-    widths  = [ max(strwidth(get(strcnames, c, "")), maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
+    widths  = [ max(strwidth(get(strcnames, c, "")), isempty(reprs) ? 0 : maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
     if sum(widths) + 2*nc > width
         return showmeta(io, t, cnames)
     end
@@ -219,7 +226,7 @@ function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothin
                 print(io, "│ ")
             end
         end
-        if n > showrows && r == firstfew
+        if n > showrows && ((ellipsis == :middle && r == firstfew) || (ellipsis == :end && r == size(reprs, 1)))
             if divider === nothing
                 println(io)
                 print(io, "⋮")

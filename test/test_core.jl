@@ -350,8 +350,8 @@ a  test │ x    y
 2  2 │ 5.0  8
 3  1 │ 6.0  7"""
 
-@test repr(NDSparse([1:18;],ones(Int,18))) == """
-1-d NDSparse with 18 values (Int64):
+@test repr(NDSparse([1:19;],ones(Int,19))) == """
+1-d NDSparse with 19 values (Int64):
 1  │
 ───┼──
 1  │ 1
@@ -364,14 +364,14 @@ a  test │ x    y
 8  │ 1
 9  │ 1
    ⋮
-11 │ 1
 12 │ 1
 13 │ 1
 14 │ 1
 15 │ 1
 16 │ 1
 17 │ 1
-18 │ 1"""
+18 │ 1
+19 │ 1"""
 
 function foo(n, data=ones(Int, 1))
     t=IndexedTables.namedtuple((Symbol("x$i") for i=1:n)...)
