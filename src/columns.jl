@@ -48,11 +48,36 @@ columns(c::Columns) = c.columns
 eltype{D,C}(::Type{Columns{D,C}}) = D
 length(c::Columns) = length(c.columns[1])
 ndims(c::Columns) = 1
+
+"""
+    ncols(itr)
+
+Returns the number of columns in `itr`.
+
+```jldoctest
+julia> ncols([1,2,3])
+1
+
+julia> d = ncols(rows(([1,2,3],[4,5,6])))
+2
+
+julia> ncols(table(([1,2,3],[4,5,6])))
+2
+
+julia> ncols(table(@NT(x=[1,2,3],y=[4,5,6])))
+2
+
+julia> ncols(ndsparse(d, [7,8,9]))
+3
+```
+"""
+function ncols end
 ncols(c::Columns) = nfields(typeof(c.columns))
 ncols(c::AbstractArray) = 1
+
 size(c::Columns) = (length(c),)
 Base.IndexStyle(::Type{<:Columns}) = IndexLinear()
-summary(c::Columns{D}) where {D<:Tuple} = "Columns{$D}"
+summary(c::Columns{D}) where {D<:Tuple} = "$(length(c))-element Columns{$D}"
 
 empty!(c::Columns) = (foreach(empty!, c.columns); c)
 similar(c::Columns{D,C}) where {D,C} = Columns{D,C}(map(similar, c.columns))
@@ -281,20 +306,6 @@ end
     ex
 end
 
-## As
-
-struct As{F}
-    f::F
-    src::Union{Void, Int, Symbol}
-    dest::Union{Int, Symbol}
-end
-
-as(f, src, dest) = As(f, src, dest)
-as(src, dest) = as(identity, src, dest)
-as(xs::AbstractArray, dest) = as(xs, nothing, dest)
-as(name::Symbol) = x -> as(x, name)
-
-
 ### Iteration API
 
 # For `columns(t, names)` and `rows(t, ...)` to work, `t`
@@ -315,19 +326,46 @@ function _colindex(fnames::AbstractArray, col)
     elseif isa(col, Symbol)
         idx = findfirst(fnames, col)
         idx > 0 && return idx
-    elseif isa(col, As)
-        return _colindex(fnames, col.src)
+    elseif isa(col, Pair{Symbol, <:AbstractArray})
+        return 0
+    elseif isa(col, Pair{Symbol, <:Any})
+        return _colindex(fnames, col[1])
     elseif isa(col, AbstractArray)
         return 0
     end
     error("column $col not found.")
 end
 
-"""
-`column(c, which)`
+# const ColPicker = Union{Int, Symbol, Pair{Symbol=>Function}, Pair{Symbol=>AbstractVector}, AbstractVector}
 
-Returns the column with a given name (which::Symbol)
-or at the given index (which::Int).
+"""
+    column(itr, which)
+
+Returns single a column from `itr`. `which` can be either:
+
+- An integer - causes the column at that index to be returned
+
+```jldoctest
+```
+
+- A symbol - causes the column with that name to be returned
+
+```jldoctest
+```
+
+- A pair of symbol or int and a function - applies the function to every element in the column and returns it.
+
+```jldoctest
+```
+
+- A vector - the vector itself is returned, it must be of the same length as `itr`.
+
+```jldoctest
+```
+
+`itr` can be any of `Columns`, `AbstractVector`, `Table` or `NDSparse`.
+
+The right names to reference the columns in `itr` in selection (`which`) are the same as those returned by `colnames(itr)`.
 """
 column(c, x) = columns(c)[colindex(c, x)]
 
@@ -336,23 +374,10 @@ column(c, x) = columns(c)[colindex(c, x)]
     getfield(c.columns, x)
 end
 
-function column(t, a::As)
-    a.f(column(t, a.src))
-end
-
-column(t, a::As{<:AbstractVector}) = a.f
 column(t, a::AbstractArray) = a
+column(t, a::Pair{Symbol, <:AbstractArray}) = a[2]
+column(t, a::Pair{Symbol, <:Any}) = map(a[2], column(t, a[1]))
 
-"""
-`columns(t::Columns, which::Tuple)`
-
-Returns a subset of columns identified by `which`
-as a tuple or named tuple of vectors.
-
-Use `as(src, dest)` in the tuple to rename a column
-from `src` to `dest`. Optionally, you can specify a
-function `f` to apply to the column: `as(f, src, dest)`.
-"""
 function columns(c, which::Tuple)
     cnames = colnames(c, which)
     if all(x->isa(x, Symbol), cnames)
@@ -362,6 +387,17 @@ function columns(c, which::Tuple)
     end
     tuplewrap((column(c, w) for w in which)...)
 end
+
+"""
+`columns(itr, which)`
+
+Returns a (named) tuple of columns from `itr`
+
+`which` can be:
+
+- A tuple of one or more of the above - returns a tuple of selected values
+
+"""
 columns(t, which) = column(t, which)
 
 function colnames(c, cols::Union{Tuple, AbstractArray})
@@ -373,8 +409,8 @@ function colname(c, col)
         col == 0 && return 0
         i = colindex(c, col)
         return colnames(c)[i]
-    elseif isa(col, As)
-        return col.dest
+    elseif isa(col, Pair{Symbol, <:Any})
+        return col[1]
     elseif isa(col, AbstractVector)
         return 0
     end
@@ -394,7 +430,7 @@ rows(cols::Tup) = Columns(cols)
 `rows(t, which)`
 
 Returns an array of rows in a subset of columns in `t`
-identified by `which`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
+identified by `which`. `which` is either an `Int`, `Symbol` or `Pair`
 or a tuple of these types.
 """
 rows(t, which...) = rows(columns(t, which...))
