@@ -21,23 +21,22 @@ end
 Select a subset of columns.
 """
 function Base.select(t::NextTable, which::DimName...;
-                     primarykey=nothing, copy=true)
+                     pkey=nothing, copy=true)
 
     canonidx = colindex(t, which)
 
-    if primarykey === nothing
+    if pkey === nothing
         # keep original key columns
-        primarykey = collect(Iterators.filter(x->x in t.primarykey,
-                                              canonidx))
+        pkey = collect(Iterators.filter(x->x in t.pkey, canonidx))
     end
 
     perms = filter(t.perms) do p
         all(x->x in canonidx, p.columns)
     end
 
-    NextTable(t, columns=rows(t, which), perms=perms,
-              cardinality=t.cardinality[[canonidx...]],
-              primarykey=primarykey, copy=copy)
+    table(t, columns=rows(t, which), perms=perms,
+          cardinality=t.cardinality[[canonidx...]],
+          pkey=pkey, copy=copy)
 end
 
 # Filter on data field
@@ -64,8 +63,8 @@ function groupreduce_to!(f, key, data, dest_key, dest_data, perm)
 end
 
 function bestname(t, col, fallback)
-    if isa(col, As)
-        col.dest
+    if isa(col, Pair{Symbol, <:Any})
+        col[1]
     elseif isa(col, Union{Symbol, Integer}) && eltype(t) <: NamedTuple
         # keep the name of the original column
         name = fieldnames(eltype(t))[colindex(t, col)]

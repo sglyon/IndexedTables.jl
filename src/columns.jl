@@ -1,13 +1,18 @@
-# a type that stores an array of tuples as a tuple of arrays
-
 using Compat
 
 import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
     summary, resize!, vcat, serialize, deserialize, append!, copy!
 
-export Columns
+export Columns, colnames, ncols
 
+"""
+A type that stores an array of tuples as a tuple of arrays.
+
+# Fields:
+
+- `columns`: a tuple or named tuples of arrays. Also `columns(x)`
+"""
 struct Columns{D<:Tup, C<:Tup} <: AbstractVector{D}
     columns::C
 
@@ -37,10 +42,84 @@ Columns(c::Tup) = Columns{eltypes(typeof(c)),typeof(c)}(c)
 
 # IndexedTable-like API
 
+"""
+    colnames(itr)
+
+Returns the names of the "columns" in `itr`.
+
+# Examples:
+
+```jldoctest
+julia> colnames([1,2,3])
+1-element Array{Int64,1}:
+ 1
+
+julia> colnames(Columns([1,2,3], [3,4,5]))
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> colnames(table([1,2,3], [3,4,5]))
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> colnames(Columns(x=[1,2,3], y=[3,4,5]))
+2-element Array{Symbol,1}:
+ :x
+ :y
+
+julia> colnames(table([1,2,3], [3,4,5], names=[:x,:y]))
+2-element Array{Symbol,1}:
+ :x
+ :y
+
+julia> colnames(ndsparse(Columns(x=[1,2,3]), Columns(y=[3,4,5])))
+2-element Array{Symbol,1}:
+ :x
+ :y
+
+julia> colnames(ndsparse(Columns(x=[1,2,3]), [3,4,5]))
+2-element Array{Any,1}:
+ :x
+ 1
+ 2
+
+julia> colnames(ndsparse(Columns(x=[1,2,3]), [3,4,5]))
+2-element Array{Any,1}:
+ :x
+ 2
+
+julia> colnames(ndsparse(Columns([1,2,3], [4,5,6]), Columns(x=[6,7,8])))
+3-element Array{Any,1}:
+ 1
+ 2
+ :x
+
+julia> colnames(ndsparse(Columns(x=[1,2,3]), Columns([3,4,5],[6,7,8])))
+3-element Array{Any,1}:
+ :x
+ 2
+ 3
+```
+"""
+function colnames end
+
 Base.@pure colnames(t::AbstractVector) = [1]
 columns(v::AbstractVector) = (v,)
 
 Base.@pure colnames(t::Columns) = fieldnames(eltype(t))
+
+"""
+    columns(itr)
+
+Return all columns in the iterator `itr`. Works on `Columns`, `Table`,
+`NDSparse` and `AbstractVector`, and their [distributed counterparts](@distributed).
+
+```jldoctest
+```
+"""
+columns(c) = error("no columns defined for $(typeof(c))")
 columns(c::Columns) = c.columns
 
 # Array-like API

@@ -8,7 +8,7 @@ import Base:
     ==, broadcast, empty!, copy, similar, sum, merge, merge!, mapslices,
     permutedims, reducedim, serialize, deserialize
 
-export NDSparse, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column, rows, as,
+export NDSparse, flush!, aggregate!, aggregate_vec, where, pairs, convertdim, columns, column, rows,
     itable, update!, aggregate, reducedim_vec, dimlabels
 
 const Tup = Union{Tuple,NamedTuple}

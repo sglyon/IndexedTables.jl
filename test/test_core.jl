@@ -53,8 +53,8 @@ let
     @test rows(x) == [@NT(a=1,b=1,c=3), @NT(a=1,b=2,c=4)]
     @test rows(x, :b) == [1, 2]
     @test rows(x, (:b, :c)) == [@NT(b=1,c=3), @NT(b=2,c=4)]
-    @test rows(x, (:c, as(-, :b, :x))) == [@NT(c=3, x=-1),@NT(c=4, x=-2)]
-    @test rows(x, (:c, [1,2] |> as(:x))) == [@NT(c=3, x=1),@NT(c=4, x=2)]
+    @test rows(x, (:c, :b => -)) == [@NT(c=3, b=-1),@NT(c=4, b=-2)]
+    @test rows(x, (:c, :x => [1,2])) == [@NT(c=3, x=1),@NT(c=4, x=2)]
     @test rows(x, (:c, [1,2])) == [(3,1), (4,2)]
 
     @test keys(x) == [@NT(a=1,b=1), @NT(a=1,b=2)]
@@ -64,8 +64,6 @@ let
     @test values(x,1) == [3,4]
     @test values(y) == [3, 4]
     @test values(y,1) == [3,4]
-    @test values(y,as(reverse, 1, :x)) == [4, 3]
-    @test values(y,(as(reverse, 1, :x),)) == [@NT(x=4), @NT(x=3)]
 
     @test collect(pairs(x)) == [@NT(a=1,b=1)=>@NT(c=3), @NT(a=1,b=2)=>@NT(c=4)]
     @test collect(pairs(y)) == [@NT(a=1,b=1)=>3, @NT(a=1,b=2)=>4]
@@ -82,7 +80,7 @@ let c = Columns([1,1,1,2,2], [1,2,4,3,5]),
     @test vcat(Columns(x=[1]), Columns(x=[1.0])) == Columns(x=[1,1.0])
     @test vcat(Columns(x=PooledArray(["x"])), Columns(x=["y"])) == Columns(x=["x", "y"])
 
-    @test summary(c) == "Columns{Tuple{Int64,Int64}}"
+    @test summary(c) == "5-element Columns{Tuple{Int64,Int64}}"
 end
 
 let

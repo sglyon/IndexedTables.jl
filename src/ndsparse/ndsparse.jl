@@ -1,3 +1,5 @@
+export NDSparse, ndsparse
+
 struct NDSparse{T, D<:Tuple, C<:Columns, V<:AbstractVector}
     index::C
     data::V
@@ -20,17 +22,18 @@ Base.@deprecate_binding Table NDSparse
 
 
 """
-`NDSparse(indices::Columns, data::AbstractVector; kwargs...)`
+    ndsparse(indices::Columns, data::AbstractVector; agg, presorted, copy, chunks)
 
 Construct an NDSparse array with the given indices and data. Each vector in `indices` represents the index values for one dimension. On construction, the indices and data are sorted in lexicographic order of the indices.
 
-Keyword arguments:
+# Arguments:
 
 * `agg::Function`: If `indices` contains duplicate entries, the corresponding data items are reduced using this 2-argument function.
 * `presorted::Bool`: If true, the indices are assumed to already be sorted and no sorting is done.
 * `copy::Bool`: If true, the storage for the new array will not be shared with the passed indices and data. If false (the default), the passed arrays will be copied only if necessary for sorting. The only way to guarantee sharing of data is to pass `presorted=true`.
+* `chunks::Integer`: distribute the table into `chunks` (Integer) chunks (a safe bet is nworkers()). Not distributed by default. See [Distributed](@distributed) docs.
 """
-function NDSparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false) where {T,C<:Columns}
+function ndsparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false) where {T,C<:Columns}
     length(I) == length(d) || error("index and data must have the same number of elements")
 
     if !presorted && !issorted(I)
@@ -53,6 +56,9 @@ function NDSparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy
     agg===nothing || aggregate!(agg, nd)
     return nd
 end
+
+# backwards compat
+NDSparse(idx::Columns, data; kwargs...) = ndsparse(idx, data; kwargs...)
 
 # TableLike API
 Base.@pure function colnames(t::NDSparse)
@@ -78,7 +84,7 @@ Construct an NDSparse array from columns. The last argument is the data column, 
 """
 function NDSparse(columns...; names=nothing, rest...)
     keys, data = columns[1:end-1], columns[end]
-    NDSparse(Columns(keys..., names=names), data; rest...)
+    ndsparse(Columns(keys..., names=names), data; rest...)
 end
 
 similar(t::NDSparse) = NDSparse(similar(t.index, 0), similar(t.data, 0))
@@ -112,9 +118,6 @@ dimlabels{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = fieldnames(eltype(C))
 
 # Generic ndsparse constructor that also works with distributed
 # arrays in JuliaDB
-
-ndsparse(keycols::Columns, valuecols::AbstractVector) =
-    NDSparse(keycols, valuecols)
 
 function ndsparse(keycols::Tup, valuecols::Tup)
     NDSparse(rows(keycols), rows(valuecols))
