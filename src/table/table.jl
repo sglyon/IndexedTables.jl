@@ -1,4 +1,5 @@
-export NextTable, table, colnames, pkeynames, columns, pkeys, reindex
+export NextTable, table, colnames, pkeynames, columns, pkeys, reindex,
+       setcol
 
 """
 A permutation
@@ -469,6 +470,109 @@ end
 
 function reindex(t::NextTable, by=pkeynames(t), select=excludecols(t, by); kwargs...)
     reindex(NextTable, t, by, select; kwargs...)
+end
+
+canonname(t, x::Symbol) = x
+canonname(t, x::Int) = colnames(t)[colindex(t, x)]
+
+"""
+    setcol(t::Table, col::Union{Symbol, Int}, x)
+
+Sets a `x` as the column identified by `col`.
+
+    setcol(t::Table, map::Pair...)
+
+Set many columns at a time.
+
+# Examples:
+
+```jldoctest
+julia> t = table([1,2], [3,4], names=[:x, :y])
+Table with 2 rows, 2 columns:
+x  y
+────
+1  3
+2  4
+
+julia> setcol(t, 2, [5,6])
+Table with 2 rows, 2 columns:
+x  y
+────
+1  5
+2  6
+
+julia> setcol(t, 2=>[5,6], :x=>1./column(t, 1))
+Table with 2 rows, 2 columns:
+x    y
+──────
+1.0  5
+0.5  6
+
+```
+
+"""
+function setcol(t::NextTable, map::Pair...)
+    reduce((t,x)->setcol(t, x[1], x[2]),t,map)
+end
+
+function setcol(t::NextTable, col::Union{Symbol, Int}, x)
+    table(t, columns=tuplesetindex(columns(t), x, canonname(t, col)),
+          copy=colindex(t, col) in t.pkey)
+end
+
+"""
+    map(f, t::Table; select)
+
+Apply `f` to every row in `t`. `select` selects fields
+passed to `f`.
+
+If the return value of `f` is a tuple or named tuple a
+new table is created with the return values. If not, a
+vector of results is returned.
+
+# Examples
+
+```jldoctest
+julia> t = table([0.01, 0.05], [1,2], [3,4], names=[:t, :x, :y])
+Table with 2 rows, 3 columns:
+t     x  y
+──────────
+0.01  1  3
+0.05  2  4
+
+julia> map(row->row.x + row.y, t)
+2-element Array{Int64,1}:
+ 4
+ 6
+
+julia> map(row->row.x/row.t, t, select=(:t,:x)) # row only cotains t and x
+2-element Array{Float64,1}:
+ 100.0
+  40.0
+
+julia> polar = map(p->@NT(r=hypot(p.x + p.y), θ=atan2(p.y, p.x)), t)
+Table with 2 rows, 2 columns:
+r    θ
+────────────
+4.0  1.24905
+6.0  1.10715
+
+julia> map(sin, polar, select=:θ)
+2-element Array{Float64,1}:
+ 0.948683
+ 0.894427
+
+julia> map(sin, polar, select=:θ) == column(polar, :θ=>sin) # an alternative
+true
+
+```
+"""
+function map(f, t::NextTable; select=rows(t))
+    d = rows(t, select)
+    T = _promote_op(f, eltype(d))
+    x = similar(arrayof(T), length(t))
+    map!(f, x, d)
+    isa(x, Columns) ? table(x) : x
 end
 
 # showing
