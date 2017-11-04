@@ -16,18 +16,16 @@ end
 abstract type AbstractIndexedTable end
 
 """
-An indexed table
-
-# Fields:
-
-- `columns`: `Columns` object which iterates to give an array of rows
-- `perms`: A vector of `Perm` objects
-- `cardinality`: Used internally to store what percent of the data in each column is unique
+A table.
 """
 struct NextTable{C<:Columns} <: AbstractIndexedTable
+    # `Columns` object which iterates to give an array of rows
     columns::C
+    # columns that are primary keys (Vector{Int})
     pkey::Vector{Int}
+    # Cache permutations by various subsets of columns
     perms::Vector{Perm}
+    # store what percent of the data in each column is unique
     cardinality::Vector{Nullable{Float64}}
 
     columns_buffer::C
@@ -105,20 +103,60 @@ x  y  z
 1  3  7
 2  1  6
 2  2  4
-
 ```
 Note that the keys do not have to be unique.
 
+`chunks` attribute allows you to create a distributed table. Note this function needs JuliaDB package.
+
+```jldoctest
+julia> t = table([2,3,1,4], [4,5,6,7], names=[:x, :y], pkey=:x, chunks=2)
+Distributed Table with 4 rows in 2 chunks:
+x  y
+────
+1  6
+2  4
+3  5
+4  7
+```
+
+A distributed table will be constructed if one of the arrays passed into `table` constructor is a distributed
+array. A distributed Array can be constructed using `distribute`:
+
+```jldoctest
+
+julia> x = distribute([1,2,3,4], 2);
+
+julia> t = table(x, [5,6,7,8], names=[:x,:y])
+Distributed Table with 4 rows in 2 chunks:
+x  y
+────
+1  5
+2  6
+3  7
+4  8
+
+julia> table(columns(t)..., [9,10,11,12], names=[:x,:y,:z]) # columns(t) returns tuple of distributed arrays
+Distributed Table with 4 rows in 2 chunks:
+x  y  z
+────────
+1  5  9
+2  6  10
+3  7  11
+4  8  12
+
+```
 """
 function table end
 
-function table(cs::Columns;
+function table(::Val{:serial}, cols::Tup;
                pkey=Int[],
-               chunks=nothing,
+               chunks=nothing, # unused here
                perms=Perm[],
                presorted=false,
                copy=true,
-               cardinality=fill(Nullable{Float64}(), length(columns(cs))))
+               cardinality=fill(Nullable{Float64}(), length(cols)))
+
+    cs = rows(cols)
 
     if isa(pkey, Union{Int, Symbol})
         pkey = [pkey]
@@ -151,10 +189,38 @@ function table(cs::Columns;
            similar(cs, 0))
 end
 
-table(t::Tup; kwargs...) = table(Columns(t); kwargs...)
+function table{impl}(::Val{impl}, cols; kwargs...)
+    if impl == :distributed && isa(cols, Tup)
+        error("""You requested to create a distributed table.
+                 Distributed table is implemented by JuliaDB.
+                 run `using JuliaDB` and try again.""")
+    else
+        error("unknown table implementation invoked")
+    end
+end
+
+table_impl(impl::Val) = impl
+table_impl(impl::Val, x::AbstractArray, z...) = table_impl(impl, z...)
+table_impl(x::AbstractArray...) = table_impl(Val{:serial}(), x...)
+
+function table(cs::Tup; chunks=nothing, kwargs...)
+    if chunks !== nothing
+        impl = Val{:distributed}()
+    else
+        impl = table_impl(astuple(cs)...)
+    end
+    table(impl, cs; chunks=chunks, kwargs...)
+end
+
+table(cs::Columns; kwargs...) = table(columns(cs); kwargs...)
 
 function table(cols::AbstractArray...; names=nothing, kwargs...)
-    table(Columns(cols...; names=names); kwargs...)
+    if isa(names, AbstractArray) && all(x->isa(x, Symbol), names)
+        cs = namedtuple(names...)(cols...)
+    else
+        cs = cols
+    end
+    table(cs; kwargs...)
 end
 
 # Easy constructor to create a derivative table
@@ -420,8 +486,9 @@ function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothin
             firstfew = showrows - lastfew - 1
             rows = n > showrows ? [1:firstfew; (n-lastfew+1):n] : [1:n;]
         elseif ellipsis == :end
-            rows = n == showrows ?
-                [1:showrows;] : [1:showrows-1;]
+            lst = n == showrows ?
+                showrows : showrows-1 # make space for ellipse
+            rows = [1:min(length(t), showrows);]
         else
             error("ellipsis must be either :middle or :end")
         end
@@ -485,4 +552,10 @@ function show(io::IO, t::NextTable{T}) where {T}
     header = "Table with $(length(t)) rows, $(length(columns(t))) columns:"
     cstyle = Dict([i=>:bold for i in t.pkey])
     showtable(io, t, header=header, cstyle=cstyle)
+end
+
+function Base.merge(a::NextTable, b::NextTable)
+    @assert colnames(a) == colnames(b)
+    @assert a.pkey == b.pkey
+    table(map(vcat, columns(a), columns(b)), pkey=a.pkey, copy=false)
 end

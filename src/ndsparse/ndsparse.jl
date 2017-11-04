@@ -22,7 +22,7 @@ Base.@deprecate_binding Table NDSparse
 
 
 """
-    ndsparse(indices::Columns, data::AbstractVector; agg, presorted, copy, chunks)
+    ndsparse(indices, data; agg, presorted, copy, chunks)
 
 Construct an NDSparse array with the given indices and data. Each vector in `indices` represents the index values for one dimension. On construction, the indices and data are sorted in lexicographic order of the indices.
 
@@ -32,8 +32,67 @@ Construct an NDSparse array with the given indices and data. Each vector in `ind
 * `presorted::Bool`: If true, the indices are assumed to already be sorted and no sorting is done.
 * `copy::Bool`: If true, the storage for the new array will not be shared with the passed indices and data. If false (the default), the passed arrays will be copied only if necessary for sorting. The only way to guarantee sharing of data is to pass `presorted=true`.
 * `chunks::Integer`: distribute the table into `chunks` (Integer) chunks (a safe bet is nworkers()). Not distributed by default. See [Distributed](@distributed) docs.
+
+# Examples:
+
+```jldoctest
+
+julia> x = ndsparse(["a","b"],[3,4])
+1-d NDSparse with 2 values (Int64):
+1   │
+────┼──
+"a" │ 3
+"b" │ 4
+
+julia> keytype(x), eltype(x)
+(Tuple{String}, Int64)
+
+julia> x = ndsparse((["a","b"],[3,4]), [5,6])
+2-d NDSparse with 2 values (Int64):
+1    2 │
+───────┼──
+"a"  3 │ 5
+"b"  4 │ 6
+
+julia> keytype(x), eltype(x)
+(Tuple{String,Int64}, Int64)
+
+julia> x["a", 3]
+5
+
+julia> x = ndsparse((["a","b"],[3,4]), ([5,6], [7.,8.]))
+2-d NDSparse with 2 values (2-tuples):
+1    2 │ 3  4
+───────┼───────
+"a"  3 │ 5  7.0
+"b"  4 │ 6  8.0
+
+julia> x = ndsparse(@NT(x=["a","a","b"],y=[3,4,4]), @NT(p=[5,6,7], q=[8.,9.,10.]))
+2-d NDSparse with 3 values (2 field named tuples):
+x    y │ p  q
+───────┼────────
+"a"  3 │ 5  8.0
+"a"  4 │ 6  9.0
+"b"  4 │ 7  10.0
+
+julia> keytype(x), eltype(x)
+(Tuple{String,Int64}, NamedTuples._NT_p_q{Int64,Float64})
+
+julia> x["a", :]
+2-d NDSparse with 2 values (2 field named tuples):
+x    y │ p  q
+───────┼───────
+"a"  3 │ 5  8.0
+"a"  4 │ 6  9.0
+
+```
 """
+function ndsparse end
 function ndsparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false) where {T,C<:Columns}
+    if !isempty(filter(x->!isa(x, Int),
+                       intersect(colnames(I), colnames(d))))
+        error("All column names, including index and data columns, must be distinct")
+    end
     length(I) == length(d) || error("index and data must have the same number of elements")
 
     if !presorted && !issorted(I)
@@ -60,6 +119,8 @@ end
 # backwards compat
 NDSparse(idx::Columns, data; kwargs...) = ndsparse(idx, data; kwargs...)
 
+ndsparse(x::AbstractVector, y::AbstractVector) = ndsparse(Columns(x), y)
+
 # TableLike API
 Base.@pure function colnames(t::NDSparse)
     dnames = colnames(t.data)
@@ -75,6 +136,28 @@ columns(nd::NDSparse) = concat_tup(columns(nd.index), columns(nd.data))
 
 permcache(t::NDSparse) = permcache(t._table)
 cacheperm!(t::NDSparse, p) = cacheperm!(t._table, p)
+
+"""
+    pkeynames(t::NDSparse)
+
+Names of the primary key columns in `t`.
+
+# Example
+
+```jldoctest
+
+julia> x = ndsparse([1,2],[3,4])
+1-d NDSparse with 2 values (Int64):
+1 │
+──┼──
+1 │ 3
+2 │ 4
+
+julia> pkeynames(x)
+(1,)
+
+```
+"""
 pkeynames(t::NDSparse) = (dimlabels(t)...)
 
 """
@@ -114,13 +197,21 @@ convertkey(t::NDSparse{V,K,I}, tup::Tuple) where {V,K,I} = _convert(eltype(I), t
 ndims(t::NDSparse) = length(t.index.columns)
 length(t::NDSparse) = (flush!(t);length(t.index))
 eltype{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = T
+Base.keytype{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = D
+Base.keytype(x::NDSparse) = keytype(typeof(x))
 dimlabels{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = fieldnames(eltype(C))
 
 # Generic ndsparse constructor that also works with distributed
 # arrays in JuliaDB
 
 function ndsparse(keycols::Tup, valuecols::Tup)
-    NDSparse(rows(keycols), rows(valuecols))
+    ndsparse(rows(keycols), rows(valuecols))
+end
+function ndsparse(keycols::AbstractVector, valuecols::Tup)
+    ndsparse((keycols,), valuecols)
+end
+function ndsparse(keycols::Tup, valuecols::AbstractVector)
+    ndsparse(rows(keycols), valuecols)
 end
 
 Base.@deprecate itable(x, y) ndsparse(x, y)
