@@ -36,7 +36,6 @@ Construct an NDSparse array with the given indices and data. Each vector in `ind
 # Examples:
 
 ```jldoctest
-
 julia> x = ndsparse(["a","b"],[3,4])
 1-d NDSparse with 2 values (Int64):
 1   │
@@ -46,6 +45,21 @@ julia> x = ndsparse(["a","b"],[3,4])
 
 julia> keytype(x), eltype(x)
 (Tuple{String}, Int64)
+
+julia> x = ndsparse(@NT(date=Date.(2014:2017)), [4:7;])
+1-d NDSparse with 4 values (Int64):
+date       │
+───────────┼──
+2014-01-01 │ 4
+2015-01-01 │ 5
+2016-01-01 │ 6
+2017-01-01 │ 7
+
+julia> x[Date("2015-01-01")]
+5
+
+julia> keytype(x), eltype(x)
+(Tuple{Date}, Int64)
 
 julia> x = ndsparse((["a","b"],[3,4]), [5,6])
 2-d NDSparse with 2 values (Int64):
@@ -86,9 +100,54 @@ x    y │ p  q
 "a"  4 │ 6  9.0
 
 ```
+
+Passing a `chunks` option to `ndsparse`, or constructing with a distributed array will cause the result to be distributed. Use `distribute` function to distribute an array.
+
+```jldoctest
+julia> x = ndsparse(@NT(date=Date.(2014:2017)), [4:7.;], chunks=2)
+1-d Distributed NDSparse with 4 values (Float64) in 2 chunks:
+date       │
+───────────┼────
+2014-01-01 │ 4.0
+2015-01-01 │ 5.0
+2016-01-01 │ 6.0
+2017-01-01 │ 7.0
+
+julia> x = ndsparse(@NT(date=Date.(2014:2017)), distribute([4:7;], 2))
+1-d Distributed NDSparse with 4 values (Float64) in 2 chunks:
+date       │
+───────────┼────
+2014-01-01 │ 4.0
+2015-01-01 │ 5.0
+2016-01-01 │ 6.0
+2017-01-01 │ 7.0
+```
+
+Distribution is done to match the first distributed column from left to right. Specify `chunks` to override this.
 """
 function ndsparse end
-function ndsparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy=false) where {T,C<:Columns}
+
+function ndsparse(I::Tup, d::Union{Tup, AbstractVector};
+                  chunks=nothing, kwargs...)
+    if chunks !== nothing
+        impl = Val{:distributed}()
+    else
+        impl = _impl(astuple(I)...)
+        if impl === Val{:serial}()
+            impl = isa(d, Tup) ?
+                _impl(impl, astuple(d)...) : _impl(d)
+        end
+    end
+    ndsparse(impl, I, d; chunks=chunks, kwargs...)
+end
+
+function ndsparse(::Val{:serial}, ks::Tup, vs::Union{Tup, AbstractVector};
+                  agg=nothing, presorted=false,
+                  chunks=nothing, copy=false)
+
+    I = rows(ks)
+    d = vs isa Tup ? Columns(vs) : vs
+
     if !isempty(filter(x->!isa(x, Int),
                        intersect(colnames(I), colnames(d))))
         error("All column names, including index and data columns, must be distinct")
@@ -111,15 +170,28 @@ function ndsparse(I::C, d::AbstractVector{T}; agg=nothing, presorted=false, copy
     end
     stripnames(x) = rows(astuple(columns(x)))
     _table = convert(NextTable, stripnames(I), stripnames(d); presorted=true, copy=false)
-    nd = NDSparse{T,astuple(eltype(C)),C,typeof(d)}(I, d, _table, similar(I,0), similar(d,0))
+    nd = NDSparse{eltype(d),astuple(eltype(I)),typeof(I),typeof(d)}(
+        I, d, _table, similar(I,0), similar(d,0)
+    )
     agg===nothing || aggregate!(agg, nd)
     return nd
 end
 
+function ndsparse(x::AbstractVector, y; kwargs...)
+    ndsparse((x,), y; kwargs...)
+end
+
+function ndsparse(x::Tup, y::Columns; kwargs...)
+    ndsparse(x, columns(y); kwargs...)
+end
+
+function ndsparse(x::Columns, y::AbstractVector; kwargs...)
+    ndsparse(columns(x), y; kwargs...)
+end
+
+
 # backwards compat
 NDSparse(idx::Columns, data; kwargs...) = ndsparse(idx, data; kwargs...)
-
-ndsparse(x::AbstractVector, y::AbstractVector) = ndsparse(Columns(x), y)
 
 # TableLike API
 Base.@pure function colnames(t::NDSparse)
@@ -203,16 +275,6 @@ dimlabels{T,D,C,V}(::Type{NDSparse{T,D,C,V}}) = fieldnames(eltype(C))
 
 # Generic ndsparse constructor that also works with distributed
 # arrays in JuliaDB
-
-function ndsparse(keycols::Tup, valuecols::Tup)
-    ndsparse(rows(keycols), rows(valuecols))
-end
-function ndsparse(keycols::AbstractVector, valuecols::Tup)
-    ndsparse((keycols,), valuecols)
-end
-function ndsparse(keycols::Tup, valuecols::AbstractVector)
-    ndsparse(rows(keycols), valuecols)
-end
 
 Base.@deprecate itable(x, y) ndsparse(x, y)
 

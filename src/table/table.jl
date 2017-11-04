@@ -135,7 +135,7 @@ x  y
 3  7
 4  8
 
-julia> table(columns(t)..., [9,10,11,12], names=[:x,:y,:z]) # columns(t) returns tuple of distributed arrays
+julia> table(columns(t)..., [9,10,11,12], names=[:x,:y,:z])
 Distributed Table with 4 rows in 2 chunks:
 x  y  z
 ────────
@@ -145,6 +145,8 @@ x  y  z
 4  8  12
 
 ```
+
+Distribution is done to match the first distributed column from left to right. Specify `chunks` to override this.
 """
 function table end
 
@@ -199,15 +201,16 @@ function table{impl}(::Val{impl}, cols; kwargs...)
     end
 end
 
-table_impl(impl::Val) = impl
-table_impl(impl::Val, x::AbstractArray, z...) = table_impl(impl, z...)
-table_impl(x::AbstractArray...) = table_impl(Val{:serial}(), x...)
+# detect if a distributed table has to be constructed.
+_impl(impl::Val) = impl
+_impl(impl::Val, x::AbstractArray, z...) = _impl(impl, z...)
+_impl(x::AbstractArray...) = _impl(Val{:serial}(), x...)
 
 function table(cs::Tup; chunks=nothing, kwargs...)
     if chunks !== nothing
         impl = Val{:distributed}()
     else
-        impl = table_impl(astuple(cs)...)
+        impl = _impl(astuple(cs)...)
     end
     table(impl, cs; chunks=chunks, kwargs...)
 end
