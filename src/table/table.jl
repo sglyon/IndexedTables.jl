@@ -1,5 +1,6 @@
+import Base: setindex!
 export NextTable, table, colnames, pkeynames, columns, pkeys, reindex,
-       setcol
+       setcol, OrderedDict
 
 """
 A permutation
@@ -247,7 +248,8 @@ end
 Base.@pure colnames(t::AbstractIndexedTable) = fieldnames(eltype(t))
 columns(t::NextTable) = columns(t.columns)
 
-Base.eltype(t::NextTable) = eltype(t.columns)
+Base.eltype(::Type{NextTable{C}}) where {C} = eltype(C)
+Base.eltype(t::NextTable) = eltype(typeof(t))
 Base.copy(t::NextTable) = NextTable(t)
 Base.:(==)(a::NextTable, b::NextTable) = rows(a) == rows(b)
 
@@ -269,6 +271,13 @@ function getindex(t::NextTable, idxs::AbstractVector{<:Integer})
         # this is for gracefully allowing this later
         throw(ArgumentError("`getindex` called with unsorted index. This is not allowed at this time."))
     end
+end
+
+ColDict(t::NextTable) = ColDict(copy(t.pkey), t,
+                                copy(colnames(t)), Any[columns(t)...])
+
+function Base.getindex(d::ColDict{<:NextTable})
+    table(d.columns...; names=d.names, pkey=d.pkey)
 end
 
 subtable(t::NextTable, r) = t[r]
@@ -510,13 +519,40 @@ x    y
 
 ```
 
+`setcol` will result in a re-sorted copy if a primary key column is replaced.
+
+```jldoctest
+julia> t = table([0.01, 0.05], [1,2], [3,4], names=[:t, :x, :y], pkey=:t)
+Table with 2 rows, 3 columns:
+t     x  y
+──────────
+0.01  1  3
+0.05  2  4
+
+julia> t2 = setcol(t, :t, [0.1,0.05])
+Table with 2 rows, 3 columns:
+t     x  y
+──────────
+0.05  2  4
+0.1   1  3
+
+julia> t == t2
+false
+
+```
 """
-function setcol(t::NextTable, map::Pair...)
+function setcol end
+
+function setcol(t::Columns, col, x)
+    rows(tuplesetindex(columns(t), x, canonname(t, col)))
+end
+
+function setcol(t, map::Pair...)
     reduce((t,x)->setcol(t, x[1], x[2]),t,map)
 end
 
 function setcol(t::NextTable, col::Union{Symbol, Int}, x)
-    table(t, columns=tuplesetindex(columns(t), x, canonname(t, col)),
+    table(t, columns=setcol(rows(t), col, x),
           copy=colindex(t, col) in t.pkey)
 end
 
@@ -540,12 +576,12 @@ t     x  y
 0.01  1  3
 0.05  2  4
 
-julia> map(row->row.x + row.y, t)
+julia> manh = map(row->row.x + row.y, t)
 2-element Array{Int64,1}:
  4
  6
 
-julia> map(row->row.x/row.t, t, select=(:t,:x)) # row only cotains t and x
+julia> vx = map(row->row.x/row.t, t, select=(:t,:x)) # row only cotains t and x
 2-element Array{Float64,1}:
  100.0
   40.0

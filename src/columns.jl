@@ -4,7 +4,7 @@ import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
     summary, resize!, vcat, serialize, deserialize, append!, copy!
 
-export Columns, colnames, ncols
+export Columns, colnames, ncols, ColDict, insertafter!, insertbefore!, @cols
 
 """
 A type that stores an array of tuples as a tuple of arrays.
@@ -26,8 +26,8 @@ struct Columns{D<:Tup, C<:Tup} <: AbstractVector{D}
     end
 end
 
-function Columns(cols::AbstractVector...; names::Union{Vector{Symbol},Tuple{Vararg{Symbol}},Void}=nothing)
-    if isa(names, Void)
+function Columns(cols::AbstractVector...; names::Union{Vector,Tuple{Vararg{Any}},Void}=nothing)
+    if isa(names, Void) || any(x->!(x isa Symbol), names)
         Columns{eltypes(typeof(cols)),typeof(cols)}(cols)
     else
         dt = eval(:(@NT($(names...)))){map(eltype, cols)...}
@@ -398,8 +398,7 @@ end
 Base.@pure function colindex(t, col)
     _colindex(colnames(t), col)
 end
-
-function _colindex(fnames::AbstractArray, col)
+function _colindex(fnames::AbstractArray, col, default=nothing)
     if isa(col, Int) && 1 <= col <= length(fnames)
         return col
     elseif isa(col, Symbol)
@@ -412,7 +411,7 @@ function _colindex(fnames::AbstractArray, col)
     elseif isa(col, AbstractArray)
         return 0
     end
-    error("column $col not found.")
+    default !== nothing ? default : error("column $col not found.")
 end
 
 # const ColPicker = Union{Int, Symbol, Pair{Symbol=>Function}, Pair{Symbol=>AbstractVector}, AbstractVector}
@@ -513,3 +512,129 @@ identified by `which`. `which` is either an `Int`, `Symbol` or `Pair`
 or a tuple of these types.
 """
 rows(t, which...) = rows(columns(t, which...))
+
+
+## Mutable Columns Dictionary
+
+struct ColDict{T}
+    pkey::Vector{Int}
+    src::T
+    names::Vector
+    columns::Vector
+end
+
+"""
+    d = ColDict(t)
+
+Create a mutable dictionary of columns in `t`.
+
+To get the immutable iterator of the same type as `t`
+call `d[]`
+
+# Examples:
+
+```jldoctest
+
+```
+"""
+ColDict(t) = ColDict(Int[], t, copy(colnames(t)), Any[columns(t)...])
+
+function Base.getindex(d::ColDict{<:Columns})
+    Columns(d.columns...; names=d.names)
+end
+
+Base.getindex(d::ColDict, key) = rows(d[], key)
+function Base.setindex!(d::ColDict, x, key::Union{Symbol, Int})
+    k = _colindex(d.names, key, 0)
+    col = d[x]
+    if k == 0
+        push!(d.columns, key)
+        push!(d.columns, col)
+    else
+        d.columns[k] = col
+    end
+end
+
+function Base.haskey(d::ColDict, key)
+    _colindex(d.names, key, 0) != 0
+end
+
+function Base.insert!(d::ColDict, index, key, col)
+    if haskey(d, key)
+        error("Key $key already exists. Use dict[key] = col instead of inserting.")
+    else
+        insert!(d.names, index, key)
+        insert!(d.columns, index, rows(d.src, col))
+        for (i, pk) in enumerate(d.pkey)
+            if pk >= index
+                d.pkey[i] += 1 # moved right
+            end
+        end
+    end
+end
+
+function insertafter!(d::ColDict, i, key, col)
+    k = _colindex(d.names, i, 0)
+    if k == 0
+        error("$i not found. Cannot insert column after $i")
+    end
+    insert!(d, k+1, key, col)
+end
+
+function insertbefore!(d::ColDict, i, key, col)
+    k = _colindex(d.names, i, 0)
+    if k == 0
+        error("$i not found. Cannot insert column after $i")
+    end
+    insert!(d, k, key, col)
+end
+
+function Base.pop!(d::ColDict, x, key)
+    k = _colindex(d.names, key, 0)
+    col = rows(t.src, x) # allow selection
+    if k == 0
+        error("Column $key not found")
+    else
+        deleteat!(d.names, k)
+        deleteat!(d.columns, k)
+        for (i, pk) in enumerate(d.pkey)
+            if pk == k
+                deleteat!(d.pkey, i)
+            elseif pk > k
+                d.pkey[i] -= 1 # moved left
+            end
+        end
+    end
+end
+
+function Base.permute!(d::ColDict, perm::AbstractVector)
+    iperm = map(i->_colindex(d.names, i), perm)
+    permute!(d.names, iperm)
+    permute!(d.columns, iperm)
+    d.pkey[:] = invperm(iperm)[d.pkey]
+    d.columns
+end
+
+function Base.push!(d::ColDict, key, x)
+    push!(d.names, key)
+    push!(d.columns, rows(d.src, x))
+end
+
+function _cols(expr)
+    if expr.head == :call
+        dict = :(dict = ColDict($(expr.args[2])))
+        expr.args[2] = :dict
+        quote
+            let $dict
+                $expr
+                dict[]
+            end
+        end |> esc
+    else
+        error("This form of @cols is not implemented. Use `@cols f(t,args...)` where `t` is the collection.")
+    end
+end
+
+macro cols(expr)
+    _cols(expr)
+end

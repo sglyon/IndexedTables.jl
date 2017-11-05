@@ -410,8 +410,53 @@ function _map(f, xs)
     end
 end
 
-function map(f, x::NDSparse)
-    NDSparse(copy(x.index), _map(f, x.data), presorted=true)
+"""
+    map(f, x::NDSparse; select)
+
+Apply `f` to every data value in `x`. `select` selects fields
+passed to `f`. By default, the data values are selected.
+
+If the return value of `f` is a tuple or named tuple the result
+will contain many data columns.
+
+# Examples
+
+```jldoctest
+julia> t = ndsparse(@NT(t=[0.01, 0.05]), @NT(x=[1,2], y=[3,4]))
+1-d NDSparse with 2 values (2 field named tuples):
+t    │ x  y
+─────┼─────
+0.01 │ 1  3
+0.05 │ 2  4
+
+julia> manh = map(row->row.x + row.y, t)
+1-d NDSparse with 2 values (Int64):
+t    │
+─────┼──
+0.01 │ 4
+0.05 │ 6
+
+julia> vx = map(row->row.x/row.t, t, select=(:t,:x)) # note: you can also select an index column!
+
+julia> polar = map(p->@NT(r=hypot(p.x + p.y), θ=atan2(p.y, p.x)), t)
+1-d NDSparse with 2 values (2 field named tuples):
+t    │ r    θ
+─────┼─────────────
+0.01 │ 4.0  1.24905
+0.05 │ 6.0  1.10715
+
+julia> map(sin, polar, select=:θ)
+1-d NDSparse with 2 values (Float64):
+t    │
+─────┼─────────
+0.01 │ 0.948683
+0.05 │ 0.894427
+
+```
+"""
+function map(f, x::NDSparse; select=x.data)
+    ndsparse(copy(x.index), _map(f, rows(x, select)),
+             presorted=true, copy=false)
 end
 
 # lift projection on arrays of structs
