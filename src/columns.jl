@@ -404,9 +404,11 @@ function _colindex(fnames::AbstractArray, col, default=nothing)
     elseif isa(col, Symbol)
         idx = findfirst(fnames, col)
         idx > 0 && return idx
-    elseif isa(col, Pair{Symbol, <:AbstractArray})
+    elseif isa(col, Pair{<:Any, <:AbstractArray})
         return 0
-    elseif isa(col, Pair{Symbol, <:Any})
+    elseif isa(col, Tuple)
+        return 0
+    elseif isa(col, Pair{<:Any, <:Any})
         return _colindex(fnames, col[1])
     elseif isa(col, AbstractArray)
         return 0
@@ -463,7 +465,7 @@ function columns(c, which::Tuple)
     else
         tuplewrap = tuple
     end
-    tuplewrap((column(c, w) for w in which)...)
+    tuplewrap((rows(c, w) for w in which)...)
 end
 
 """
@@ -487,8 +489,11 @@ function colname(c, col)
         col == 0 && return 0
         i = colindex(c, col)
         return colnames(c)[i]
-    elseif isa(col, Pair{Symbol, <:Any})
+    elseif isa(col, Pair{<:Union{Symbol,Int}, <:Any})
         return col[1]
+    elseif isa(col, Tuple)
+        #ns = map(x->colname(c, x), col)
+        return 0
     elseif isa(col, AbstractVector)
         return 0
     end
