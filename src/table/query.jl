@@ -1,25 +1,78 @@
 export groupreduce, groupby
 
 """
-    filter(conditions, t)
+    filter(pred, t; select)
 
-Filter rows in `t` according to conditions
+Filter rows in `t` according to `pred`. `select` choses the fields that act as input to `pred`.
+
+`pred` can be:
+
+- a function - selected structs or values are passed to this function
+- a tuple of column => function pairs: applies to each named column the corresponding function, keeps only rows where all such conditions are satisfied.
+
+```jldoctest
+julia> filter(p->p.x/p.t < 100, t)
+Table with 2 rows, 3 columns:
+n    t     x
+────────────
+"b"  0.05  1
+"c"  0.07  0
+
+julia> filter(p->p.x/p.t < 100, t, select=(:x,:t))
+Table with 2 rows, 3 columns:
+n    t     x
+────────────
+"b"  0.05  1
+"c"  0.07  0
+```
+Although the two examples do the same thing, the second one will allocate structs of only `x` and `y` fields to be passed to the predicate function. This results in better performance because we aren't allocating a struct with a string object.
+
+```jldoctest
+julia> filter(iseven, t, select=:x)
+Table with 2 rows, 3 columns:
+n    t     x
+────────────
+"a"  0.01  2
+"c"  0.07  0
+
+julia> filter((:x=>iseven,), t, select=:x)
+Table with 2 rows, 3 columns:
+n    t     x
+────────────
+"a"  0.01  2
+"c"  0.07  0
+```
+
+Filtering by a single column is convenient.
+
+```jldoctest
+julia> filter((:x=>iseven, :t => a->a>0.01), t)
+Table with 1 rows, 3 columns:
+n    t     x
+────────────
+"c"  0.07  0
+
+```
+
 """
-function Base.filter(conditions, t::Dataset)
+function Base.filter(fn, t::Dataset; select=rows(t))
+    x = rows(t, select)
+    indxs = filter(i->fn(x[i]), eachindex(x))
+    t[indxs]
+end
+
+function Base.filter(pred::Tuple, t::Dataset; select=values(t))
     indxs = [1:length(t);]
-    for (c,f) in conditions
-        filt_by_col!(f, rows(t, c), indxs)
+    x = rows(t, select)
+    for (c,f) in pred
+        filt_by_col!(f, rows(x, c), indxs)
     end
     subtable(t, indxs)
 end
 
-Base.filter(pred::NamedTuple, t::Dataset) = filter(zip(fieldnames(pred), astuple(pred)), t)
-
-function Base.filter(fn::Function, t::Dataset)
-    indxs = filter(i->fn(t[i]), eachindex(t))
-    t[indxs]
+function Base.filter(pred::Pair, t::Dataset; select=values(t))
+    filter([pred], t, select=select)
 end
-
 
 """
 `select(t::NextTable, which::DimName...)`

@@ -1,5 +1,6 @@
 import Base: setindex!, reduce
-export NextTable, table, colnames, pkeynames, columns, pkeys, reindex
+import DataValues: dropna
+export NextTable, table, colnames, pkeynames, columns, pkeys, reindex, dropna
 
 """
 A permutation
@@ -394,6 +395,8 @@ function pkeys(t::NextTable)
     end
 end
 
+Base.values(t::NextTable) = rows(t)
+
 """
     excludecols(itr, cols)
 
@@ -452,7 +455,6 @@ x  y  z
 ```
 """
 function convert(::Type{NextTable}, key, val; kwargs...)
-
     cs = Columns(concat_tup(columns(key), columns(val)))
     table(cs, pkey=[1:ncols(key);]; kwargs...)
 end
@@ -568,6 +570,37 @@ end
 using OnlineStatsBase
 
 """
+    reduce(f, t::Table; select)
+
+Reduce `t` row-wise using `f`. Equivalent to reduce(f, rows(t, select))
+
+```jldoctest
+julia> t = table([0.1, 0.5], [2,1], names=[:t, :x])
+Table with 2 rows, 2 columns:
+t    x
+──────
+0.1  2
+0.5  1
+
+julia> reduce((y, x) ->map(+, y, x), t)
+(t = 0.6, x = 3)
+
+julia> reduce(+, t, select=:t)
+0.6
+```
+
+If you pass an OnlineStat object from the [OnlineStats](https://github.com/joshday/OnlineStats.jl) package,
+the statistic is computed.
+
+```jldoctest
+julia> using OnlineStats
+
+julia> reduce(Mean(), t, select=:t)
+▦ Series{0,Tuple{Mean},EqualWeight}
+┣━━ EqualWeight(nobs = 2)
+┗━━━┓
+    ┗━━ Mean(0.3)
+```
 """
 function reduce(f, t::NextTable; select=rows(t))
     reduce(f, rows(t, select))
@@ -583,6 +616,83 @@ end
 
 function reduce(f::OnlineStat, t::NextTable, v0; select=rows(t))
     merge(v0, Series(columns(t, select), f))
+end
+
+function _nonna(t::Union{Columns, NextTable}, by=(colnames(t)...))
+    indxs = [1:length(t);]
+    if !isa(by, Tuple)
+        by = (by,)
+    end
+    bycols = columns(t, by)
+    d = ColDict(t)
+    for (key, c) in zip(by, bycols)
+        x = rows(t, c)
+        filt_by_col!(!isnull, x, indxs)
+        if isa(x, Array{<:DataValue})
+            y = Array{eltype(eltype(x))}(length(x))
+            y[indxs] = map(get, x[indxs])
+            x = y
+        elseif isa(x, DataValueArray)
+            x = x.values # unsafe unwrap
+        end
+        d[key] = x
+    end
+    (d[], indxs)
+end
+
+"""
+    dropna(t[, select])
+
+Drop rows which contain NA values.
+
+```jldoctest
+julia> t = table([0.1, 0.5, NA,0.7], [2,NA,4,5], [NA,6,NA,7],
+                  names=[:t,:x,:y])
+Table with 4 rows, 3 columns:
+t    x    y
+─────────────
+0.1  2    #NA
+0.5  #NA  6
+#NA  4    #NA
+0.7  5    7
+
+julia> dropna(t)
+Table with 1 rows, 3 columns:
+t    x  y
+─────────
+0.7  5  7
+```
+Optionally `select` can be speicified to limit columns to look for NAs in.
+
+```jldoctest
+
+julia> dropna(t, :y)
+Table with 2 rows, 3 columns:
+t    x    y
+───────────
+0.5  #NA  6
+0.7  5    7
+
+julia> t1 = dropna(t, (:t, :x))
+Table with 2 rows, 3 columns:
+t    x  y
+───────────
+0.1  2  #NA
+0.7  5  7
+```
+
+Any columns whose NA rows have been dropped will be converted
+to non-na array type. In our last example, columns `t` and `x`
+got converted from `Array{DataValue{Int}}` to `Array{Int}`.
+Similarly if the vectors are of type `DataValueArray{T}`
+(default for `loadtable`) they will be converted to `Array{T}`.
+```julia
+julia> typeof(column(dropna(t,:x), :x))
+Array{Int64,1}
+```
+"""
+function dropna(t::Union{Columns, NextTable}, by=(colnames(t)...))
+    subtable(_nonna(t, by)...)
 end
 
 # showing
