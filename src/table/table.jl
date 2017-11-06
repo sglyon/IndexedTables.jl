@@ -1,4 +1,4 @@
-import Base: setindex!
+import Base: setindex!, reduce
 export NextTable, table, colnames, pkeynames, columns, pkeys, reindex
 
 """
@@ -555,12 +555,34 @@ true
 
 ```
 """
+function map(f, t::AbstractIndexedTable; select=rows(t)) end
+
 function map(f, t::NextTable; select=rows(t))
     d = rows(t, select)
     T = _promote_op(f, eltype(d))
     x = similar(arrayof(T), length(t))
     map!(f, x, d)
     isa(x, Columns) ? table(x) : x
+end
+
+using OnlineStatsBase
+
+"""
+"""
+function reduce(f, t::NextTable; select=rows(t))
+    reduce(f, rows(t, select))
+end
+
+function reduce(f, t::NextTable, v0; select=rows(t))
+    reduce(f, rows(t, select), v0)
+end
+
+function reduce(f::OnlineStat, t::NextTable; select=rows(t))
+    Series(columns(t, select), f)
+end
+
+function reduce(f::OnlineStat, t::NextTable, v0; select=rows(t))
+    merge(v0, Series(columns(t, select), f))
 end
 
 # showing
