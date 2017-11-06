@@ -422,14 +422,14 @@ will contain many data columns.
 # Examples
 
 ```jldoctest
-julia> t = ndsparse(@NT(t=[0.01, 0.05]), @NT(x=[1,2], y=[3,4]))
+julia> x = ndsparse(@NT(t=[0.01, 0.05]), @NT(x=[1,2], y=[3,4]))
 1-d NDSparse with 2 values (2 field named tuples):
 t    │ x  y
 ─────┼─────
 0.01 │ 1  3
 0.05 │ 2  4
 
-julia> manh = map(row->row.x + row.y, t)
+julia> manh = map(row->row.x + row.y, x)
 1-d NDSparse with 2 values (Int64):
 t    │
 ─────┼──
@@ -438,7 +438,7 @@ t    │
 
 julia> vx = map(row->row.x/row.t, t, select=(:t,:x)) # note: you can also select an index column!
 
-julia> polar = map(p->@NT(r=hypot(p.x + p.y), θ=atan2(p.y, p.x)), t)
+julia> polar = map(p->@NT(r=hypot(p.x + p.y), θ=atan2(p.y, p.x)), x)
 1-d NDSparse with 2 values (2 field named tuples):
 t    │ r    θ
 ─────┼─────────────

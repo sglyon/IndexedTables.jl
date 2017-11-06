@@ -255,11 +255,11 @@ for (fn, how) in [:naturaljoin =>     (:inner, false, concat_tup),
 
     @eval export $fn
 
-    @eval function $fn(f, left::IndexedTrait, right::IndexedTrait; kwargs...)
+    @eval function $fn(f, left::Dataset, right::Dataset; kwargs...)
         join(f, left, right; group=$group, how=$(Expr(:quote, how)), kwargs...)
     end
 
-    @eval function $fn(left::IndexedTrait, right::IndexedTrait; kwargs...)
+    @eval function $fn(left::Dataset, right::Dataset; kwargs...)
         $fn($f, left, right; kwargs...)
     end
 end

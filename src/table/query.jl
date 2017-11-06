@@ -1,50 +1,36 @@
 export groupreduce, groupby
 
 """
-`select(arr::NextTable, conditions::Pair...)`
+    filter(conditions, t)
 
-Filter based on index columns. Conditions are accepted as column-function pairs.
-
-Example: `select(arr, 1 => x->x>10, 3 => x->x!=10 ...)`
+Filter rows in `t` according to conditions
 """
-function Base.select(arr::NextTable, conditions::Pair...)
-    indxs = [1:length(arr);]
+function Base.filter(conditions, t::Dataset)
+    indxs = [1:length(t);]
     for (c,f) in conditions
-        filt_by_col!(f, column(arr, c), indxs)
+        filt_by_col!(f, rows(t, c), indxs)
     end
-    arr[indxs]
+    subtable(t, indxs)
 end
 
-"""
-`select(arr::NextTable, which::DimName...)`
+Base.filter(pred::NamedTuple, t::Dataset) = filter(zip(fieldnames(pred), astuple(pred)), t)
 
-Select a subset of columns.
-"""
-function Base.select(t::NextTable, which::DimName...;
-                     pkey=nothing, copy=true)
-
-    canonidx = colindex(t, which)
-
-    if pkey === nothing
-        # keep original key columns
-        pkey = collect(Iterators.filter(x->x in t.pkey, canonidx))
-    end
-
-    perms = filter(t.perms) do p
-        all(x->x in canonidx, p.columns)
-    end
-
-    table(t, columns=rows(t, which), perms=perms,
-          cardinality=t.cardinality[[canonidx...]],
-          pkey=pkey, copy=copy)
-end
-
-# Filter on data field
-function Base.filter(fn::Function, t::NextTable)
+function Base.filter(fn::Function, t::Dataset)
     indxs = filter(i->fn(t[i]), eachindex(t))
     t[indxs]
 end
 
+
+"""
+`select(t::NextTable, which::DimName...)`
+
+Select a subset of columns.
+"""
+function Base.select(t::AbstractIndexedTable, which::DimName...)
+    ColDict(t)[which]
+end
+
+# Filter on data field
 function groupreduce_to!(f, key, data, dest_key, dest_data, perm)
     n = length(key)
     i1 = 1

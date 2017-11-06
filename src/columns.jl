@@ -4,7 +4,7 @@ import Base:
     linearindexing, push!, size, sort, sort!, permute!, issorted, sortperm,
     summary, resize!, vcat, serialize, deserialize, append!, copy!
 
-export Columns, colnames, ncols, ColDict, insertafter!, insertbefore!, @cols
+export Columns, colnames, ncols, ColDict, insertafter!, insertbefore!, @cols, setcol, pushcol, popcol, insertcol, insertcolafter, insertcolbefore, renamecol
 
 """
 A type that stores an array of tuples as a tuple of arrays.
@@ -544,6 +544,7 @@ function Base.getindex(d::ColDict{<:Columns})
 end
 
 Base.getindex(d::ColDict, key) = rows(d[], key)
+
 function Base.setindex!(d::ColDict, x, key::Union{Symbol, Int})
     k = _colindex(d.names, key, 0)
     col = d[x]
@@ -589,9 +590,8 @@ function insertbefore!(d::ColDict, i, key, col)
     insert!(d, k, key, col)
 end
 
-function Base.pop!(d::ColDict, x, key)
+function Base.pop!(d::ColDict, key=length(s.names))
     k = _colindex(d.names, key, 0)
-    col = rows(t.src, x) # allow selection
     if k == 0
         error("Column $key not found")
     else
@@ -607,12 +607,12 @@ function Base.pop!(d::ColDict, x, key)
     end
 end
 
-function Base.permute!(d::ColDict, perm::AbstractVector)
-    iperm = map(i->_colindex(d.names, i), perm)
-    permute!(d.names, iperm)
-    permute!(d.columns, iperm)
-    d.pkey[:] = invperm(iperm)[d.pkey]
-    d.columns
+function rename!(d::ColDict, col, newname)
+    k = _colindex(d.names, col, 0)
+    if k == 0
+        error("$i not found. Cannot rename it.")
+    end
+    d.names[k] = newname
 end
 
 function Base.push!(d::ColDict, key, x)
@@ -638,3 +638,206 @@ end
 macro cols(expr)
     _cols(expr)
 end
+
+# Modifying a columns
+
+"""
+    setcol(t::Table, col::Union{Symbol, Int}, x)
+
+Sets a `x` as the column identified by `col`. Returns a new table.
+
+    setcol(t::Table, map::Pair...)
+
+Set many columns at a time.
+
+# Examples:
+
+```jldoctest
+julia> t = table([1,2], [3,4], names=[:x, :y])
+Table with 2 rows, 2 columns:
+x  y
+────
+1  3
+2  4
+
+julia> setcol(t, 2, [5,6])
+Table with 2 rows, 2 columns:
+x  y
+────
+1  5
+2  6
+
+julia> setcol(t, 2=>[5,6], :x=>1./column(t, 1))
+Table with 2 rows, 2 columns:
+x    y
+──────
+1.0  5
+0.5  6
+
+```
+
+`setcol` will result in a re-sorted copy if a primary key column is replaced.
+
+```jldoctest
+julia> t = table([0.01, 0.05], [1,2], [3,4], names=[:t, :x, :y], pkey=:t)
+Table with 2 rows, 3 columns:
+t     x  y
+──────────
+0.01  1  3
+0.05  2  4
+
+julia> t2 = setcol(t, :t, [0.1,0.05])
+Table with 2 rows, 3 columns:
+t     x  y
+──────────
+0.05  2  4
+0.1   1  3
+
+julia> t == t2
+false
+
+```
+"""
+setcol(t, col, x) = @cols setindex!(t, x, col)
+
+"""
+    pushcol(t, name, x)
+
+Push a column `x` to the end of the table. `name` is the name for the new column. Returns a new table.
+
+# Example:
+
+```jldoctest
+julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
+Table with 2 rows, 3 columns:
+t     x  y
+──────────
+0.01  2  3
+0.05  1  4
+
+julia> pushcol(t, :z, [1//2, 3//4])
+Table with 2 rows, 4 columns:
+t     x  y  z
+────────────────
+0.01  2  3  1//2
+0.05  1  4  3//4
+
+```
+"""
+pushcol(t, name, x) = @cols push!(t, name, x)
+
+"""
+    popcol(t, col)
+
+Remove the column `col` from the table. Returns a new table.
+
+```jldoctest
+julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
+Table with 2 rows, 3 columns:
+t     x  y
+──────────
+0.01  2  3
+0.05  1  4
+
+julia> popcol(t, :x)
+Table with 2 rows, 2 columns:
+t     y
+───────
+0.01  3
+0.05  4
+```
+"""
+popcol(t, name) = @cols pop!(t, name)
+
+"""
+    insertcol(t, position::Integer, name, x)
+
+Insert a column `x` named `name` at `position`. Returns a new table.
+
+```jldoctest
+julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
+Distributed Table with 2 rows in 2 chunks:
+t     x  y
+──────────
+0.01  2  3
+0.05  1  4
+
+julia> insertcol(t, 2, :w, [0,1])
+Distributed Table with 2 rows in 2 chunks:
+t     w  x  y
+─────────────
+0.01  0  2  3
+0.05  1  1  4
+
+```
+"""
+insertcol(t, i::Integer, name, x) = @cols insert!(t, i, name, x)
+
+"""
+    insertcolafter(t, after, name, col)
+
+Insert a column `col` named `name` after `after`. Returns a new table.
+
+```jldoctest
+julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
+Distributed Table with 2 rows in 2 chunks:
+t     x  y
+──────────
+0.01  2  3
+0.05  1  4
+
+julia> insertcolafter(t, :t, :w, [0,1])
+Distributed Table with 2 rows in 2 chunks:
+t     w  x  y
+─────────────
+0.01  0  2  3
+0.05  1  1  4
+```
+"""
+insertcolafter(t, after, name, x) = @cols insertafter!(t, after, name, x)
+
+"""
+    insertcolbefore(t, before, name, col)
+
+Insert a column `col` named `name` before `before`. Returns a new table.
+
+```jldoctest
+julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
+Distributed Table with 2 rows in 2 chunks:
+t     x  y
+──────────
+0.01  2  3
+0.05  1  4
+
+julia> insertcolbefore(t, :x, :w, [0,1])
+Distributed Table with 2 rows in 2 chunks:
+t     w  x  y
+─────────────
+0.01  0  2  3
+0.05  1  1  4
+```
+"""
+insertcolbefore(t, before, name, x) = @cols insertbefore!(t, before, name, x)
+
+"""
+    renamecol(t, col, newname)
+
+Set `newname` as the new name for column `col` in `t`. Returns a new table.
+
+```jldoctest
+julia> t = table([0.01, 0.05], [2,1], names=[:t, :x])
+Table with 2 rows, 2 columns:
+t     x
+───────
+0.01  2
+0.05  1
+
+julia> renamecol(t, :t, :time)
+Table with 2 rows, 2 columns:
+time  x
+───────
+0.01  2
+0.05  1
+```
+"""
+renamecol(t, name, newname) = @cols rename!(t, name, newname)

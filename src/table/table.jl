@@ -1,6 +1,5 @@
 import Base: setindex!
-export NextTable, table, colnames, pkeynames, columns, pkeys, reindex,
-       setcol, OrderedDict
+export NextTable, table, colnames, pkeynames, columns, pkeys, reindex
 
 """
 A permutation
@@ -36,19 +35,34 @@ end
 """
     table(cols::AbstractVector...; names, pkey, presorted, copy, chunks)
 
-Create a table with columns given by `cols`. Optionally, `names` can be specified for the columns.
-If omitted, columns will be unnamed, and the element type of the table will be a tuple rather than a named tuple.
+Create a table with columns given by `cols`.
+```jldoctest
+julia> a = table([1,2,3], [4,5,6])
+Table with 3 rows, 2 columns:
+1  2
+────
+1  4
+2  5
+3  6
+```
 
+
+```jldoctest
+julia> b = table([1,2,3], [4,5,6], names=[:x, :y])
+Table with 3 rows, 2 columns:
+x  y
+────
+1  4
+2  5
+3  6
+
+```
+`names` specify names for columns. If specified, the table will be an iterator of named tuples.
     table(cols::Union{Tuple, NamedTuple}; pkey, presorted, copy, chunks)
-
 Convert a struct of columns to a table of structs.
-
     table(cols::Columns; pkey, presorted, copy, chunks)
-
 Construct a table from a vector of tuples. See [`Columns`](@ref) and [`rows`](@ref)
-
     table(t::Union{Table, NDSparse}; pkey=pkeynames(t), presorted=true, copy, chunks)
-
 Copy a Table or NDSparse to create a new table. The same primary keys as the input are used.
 
 # Arguments:
@@ -73,17 +87,14 @@ Table with 3 rows, 2 columns:
 julia> a == table(([1,2,3], [4,5,6])) == table(Columns([1,2,3], [4,5,6])) == table(a)
 true
 
-julia> b = table([1,2,3], [4,5,6], names=[:x, :y])
-Table with 3 rows, 2 columns:
-x  y
-────
-1  4
-2  5
-3  6
-
-julia> b == table(@NT(x=[1,2,3], y=[4,5,6])) == table(Columns(x=[1,2,3], y=[4,5,6])) == table(b)
+julia> b == table(@NT(x=[1,2,3], y=[4,5,6]))
 true
 
+julia> b == table(Columns(x=[1,2,3], y=[4,5,6]))
+true
+
+julia> b == table(b)
+true
 ```
 
 Specifying `pkey` will cause the table to be sorted by the columns named in pkey:
@@ -273,10 +284,23 @@ function getindex(t::NextTable, idxs::AbstractVector{<:Integer})
     end
 end
 
-ColDict(t::NextTable) = ColDict(copy(t.pkey), t,
+function Base.getindex(d::ColDict{<:AbstractIndexedTable}, key::Tuple)
+    t = d[]
+    idx = [colindex(t, k) for k in key]
+    pkey = Int[]
+    for (i, pk) in enumerate(t.pkey)
+        j = findfirst(idx, pk)
+        if j > 0
+            push!(pkey, j)
+        end
+    end
+    table(d.src, columns=columns(t, key), pkey=pkey)
+end
+
+ColDict(t::AbstractIndexedTable) = ColDict(copy(t.pkey), t,
                                 copy(colnames(t)), Any[columns(t)...])
 
-function Base.getindex(d::ColDict{<:NextTable})
+function Base.getindex(d::ColDict{<:AbstractIndexedTable})
     table(d.columns...; names=d.names, pkey=d.pkey)
 end
 
@@ -483,78 +507,6 @@ end
 
 canonname(t, x::Symbol) = x
 canonname(t, x::Int) = colnames(t)[colindex(t, x)]
-
-"""
-    setcol(t::Table, col::Union{Symbol, Int}, x)
-
-Sets a `x` as the column identified by `col`.
-
-    setcol(t::Table, map::Pair...)
-
-Set many columns at a time.
-
-# Examples:
-
-```jldoctest
-julia> t = table([1,2], [3,4], names=[:x, :y])
-Table with 2 rows, 2 columns:
-x  y
-────
-1  3
-2  4
-
-julia> setcol(t, 2, [5,6])
-Table with 2 rows, 2 columns:
-x  y
-────
-1  5
-2  6
-
-julia> setcol(t, 2=>[5,6], :x=>1./column(t, 1))
-Table with 2 rows, 2 columns:
-x    y
-──────
-1.0  5
-0.5  6
-
-```
-
-`setcol` will result in a re-sorted copy if a primary key column is replaced.
-
-```jldoctest
-julia> t = table([0.01, 0.05], [1,2], [3,4], names=[:t, :x, :y], pkey=:t)
-Table with 2 rows, 3 columns:
-t     x  y
-──────────
-0.01  1  3
-0.05  2  4
-
-julia> t2 = setcol(t, :t, [0.1,0.05])
-Table with 2 rows, 3 columns:
-t     x  y
-──────────
-0.05  2  4
-0.1   1  3
-
-julia> t == t2
-false
-
-```
-"""
-function setcol end
-
-function setcol(t::Columns, col, x)
-    rows(tuplesetindex(columns(t), x, canonname(t, col)))
-end
-
-function setcol(t, map::Pair...)
-    reduce((t,x)->setcol(t, x[1], x[2]),t,map)
-end
-
-function setcol(t::NextTable, col::Union{Symbol, Int}, x)
-    table(t, columns=setcol(rows(t), col, x),
-          copy=colindex(t, col) in t.pkey)
-end
 
 """
     map(f, t::Table; select)
