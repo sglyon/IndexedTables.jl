@@ -408,6 +408,8 @@ function _colindex(fnames::AbstractArray, col, default=nothing)
         return 0
     elseif isa(col, Tuple)
         return 0
+    elseif isa(col, Pair{Symbol, <:Pair}) # recursive pairs
+        return _colindex(fnames, col[2])
     elseif isa(col, Pair{<:Any, <:Any})
         return _colindex(fnames, col[1])
     elseif isa(col, AbstractArray)
@@ -456,7 +458,8 @@ end
 
 column(t, a::AbstractArray) = a
 column(t, a::Pair{Symbol, <:AbstractArray}) = a[2]
-column(t, a::Pair{Symbol, <:Any}) = map(a[2], column(t, a[1]))
+column(t, a::Pair{Symbol, <:Pair}) = rows(t, a[2]) # renaming a selection
+column(t, a::Pair{<:Any, <:Any}) = map(a[2], rows(t, a[1]))
 
 function columns(c, which::Tuple)
     cnames = colnames(c, which)
@@ -489,7 +492,7 @@ function colname(c, col)
         col == 0 && return 0
         i = colindex(c, col)
         return colnames(c)[i]
-    elseif isa(col, Pair{<:Union{Symbol,Int}, <:Any})
+    elseif isa(col, Pair{<:Any, <:Any})
         return col[1]
     elseif isa(col, Tuple)
         #ns = map(x->colname(c, x), col)
