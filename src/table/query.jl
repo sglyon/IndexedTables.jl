@@ -1,97 +1,64 @@
+using OnlineStatsBase
 export groupreduce, groupby
 
-"""
-    filter(pred, t; select)
+@inline _apply(f::Series, g, x) = fit!(g, x)
+@inline _apply(f::Tup, y::Tup, x::Tup) = map(_apply, f, y, x)
+@inline _apply(f, y, x) = f(y, x)
 
-Filter rows in `t` according to `pred`. `select` choses the fields that act as input to `pred`.
+@inline init_first(f, x) = x
+@inline init_first(f::Series, x) = copy(f)
+@inline init_first(f::Tup, x::Tup) = map(init_first, f, x)
 
-`pred` can be:
+# Initialize type of output, functions to apply, input and output vectors
 
-- a function - selected structs or values are passed to this function
-- a tuple of column => function pairs: applies to each named column the corresponding function, keeps only rows where all such conditions are satisfied.
-
-```jldoctest
-julia> filter(p->p.x/p.t < 100, t)
-Table with 2 rows, 3 columns:
-n    t     x
-────────────
-"b"  0.05  1
-"c"  0.07  0
-
-julia> filter(p->p.x/p.t < 100, t, select=(:x,:t))
-Table with 2 rows, 3 columns:
-n    t     x
-────────────
-"b"  0.05  1
-"c"  0.07  0
-```
-Although the two examples do the same thing, the second one will allocate structs of only `x` and `y` fields to be passed to the predicate function. This results in better performance because we aren't allocating a struct with a string object.
-
-```jldoctest
-julia> filter(iseven, t, select=:x)
-Table with 2 rows, 3 columns:
-n    t     x
-────────────
-"a"  0.01  2
-"c"  0.07  0
-
-julia> filter((:x=>iseven,), t, select=:x)
-Table with 2 rows, 3 columns:
-n    t     x
-────────────
-"a"  0.01  2
-"c"  0.07  0
-```
-
-Filtering by a single column is convenient.
-
-```jldoctest
-julia> filter((:x=>iseven, :t => a->a>0.01), t)
-Table with 1 rows, 3 columns:
-n    t     x
-────────────
-"c"  0.07  0
-
-```
-
-"""
-function Base.filter(fn, t::Dataset; select=rows(t))
-    x = rows(t, select)
-    indxs = filter(i->fn(x[i]), eachindex(x))
-    t[indxs]
+function reduced_type(f, x)
+    _promote_op((a,b)->_apply(f, init_first(f, a), b),
+                eltype(x), eltype(x))
 end
 
-function Base.filter(pred::Tuple, t::Dataset; select=values(t))
-    indxs = [1:length(t);]
-    x = rows(t, select)
-    for (c,f) in pred
-        filt_by_col!(f, rows(x, c), indxs)
+function init_groupreduce(f, x, noutput=0) # normal functions
+    T = reduced_type(f, x)
+    f, x, similar(arrayof(T), noutput)
+end
+
+function init_groupreduce(f::Tuple, input, noutput=0)
+    reducers = map(f) do g
+        if isa(g, Pair)
+            name = g[1]
+            if isa(g[2], Pair)
+                selector, fn = g[2]
+                vec = rows(input, selector)
+            else
+                vec = input
+                fn = g[2]
+            end
+            (name, vec, fn)
+        else
+            (Symbol(g), input, g)
+        end
     end
-    subtable(t, indxs)
+    ns = map(x->x[1], reducers)
+    xs = map(x->x[2], reducers)
+    fs = map(x->x[3], reducers)
+
+    output_eltypes = map(reduced_type, fs, xs)
+
+    NT = namedtuple(ns...)
+
+    NT(fs...),
+        rows(NT(xs...)),
+        similar(arrayof(NT{output_eltypes...}), noutput) # output
 end
 
-function Base.filter(pred::Pair, t::Dataset; select=values(t))
-    filter([pred], t, select=select)
-end
-
-"""
-`select(t::NextTable, which::DimName...)`
-
-Select a subset of columns.
-"""
-function Base.select(t::AbstractIndexedTable, which::DimName...)
-    ColDict(t)[which]
-end
-
-# Filter on data field
 function groupreduce_to!(f, key, data, dest_key, dest_data, perm)
     n = length(key)
     i1 = 1
     while i1 <= n
-        val = data[perm[i1]]
+        val = init_first(f, data[perm[i1]])
         i = i1+1
         while i <= n && roweq(key, perm[i], perm[i1])
-            val = f(val, data[perm[i]])
+            _apply(f, val, data[perm[i]])
+            val = _apply(f, val, data[perm[i]])
             i += 1
         end
         push!(dest_key, key[perm[i1]])
@@ -101,20 +68,21 @@ function groupreduce_to!(f, key, data, dest_key, dest_data, perm)
     dest_key, dest_data
 end
 
-function bestname(t, col, fallback)
-    if isa(col, Pair{Symbol, <:Any})
-        col[1]
-    elseif isa(col, Union{Symbol, Integer}) && eltype(t) <: NamedTuple
-        # keep the name of the original column
-        name = fieldnames(eltype(t))[colindex(t, col)]
-    else
-        fallback
-    end
-end
+"""
+`groupreduce(f, t[, by::Selection]; select::Selection, name)`
 
+Group rows by a given key (a [Selection](@ref)).
+Apply a function `f` on the rows pair-wise to reduce each group to a single value.
+"""
 function groupreduce(f, t::NextTable, by=pkeynames(t);
-                     select=rows(t), name=nothing)
+                     select=excludecols(t, by))
 
+    if isa(f, Pair)
+        return groupreduce((f,), t, by, select=select)
+    end
+    if !isa(by, Tuple)
+        by=(by,)
+    end
     key  = rows(t, by)
     data = rows(t, select)
     perm = sortpermby(t, by)
@@ -122,24 +90,13 @@ function groupreduce(f, t::NextTable, by=pkeynames(t);
     dest_key = similar(key, 0)
     dest_data = similar(data, 0)
 
-    groupreduce_to!(f, key, data, dest_key, dest_data, perm)
-
-    if !(typeof(dest_data) <: Columns)
-        if name == nothing
-            name = bestname(t, select, Symbol(f))
-        end
-        dest_data = Columns(dest_data, names=[name])
-    end
-
-    if !(typeof(dest_key) <: Columns)
-        name = bestname(t, by, :key)
-        dest_key = Columns(dest_key, names=[name])
-    end
+    fs, input, dest_data = init_groupreduce(f, data)
+    groupreduce_to!(fs, key, input, dest_key, dest_data, perm)
 
     convert(NextTable, dest_key, dest_data)
 end
 
-function groupby(f, t::NextTable, by=pkeynames(t); select=rows(t), name=nothing)
+function groupby(f, t::NextTable, by=pkeynames(t); select=rows(t))
     key  = rows(t, by)
     data = rows(t, select)
 
@@ -169,9 +126,6 @@ function groupby(f, t::NextTable, by=pkeynames(t); select=rows(t), name=nothing)
     convert(NextTable, dest_key, dest_data)
 end
 
-@inline _apply_many(f::Tup, xs) = map(g->g(xs), f)
-@inline _apply_many(f, xs) = f(xs)
-
 function _groupby(f, key, data, perm, dest_key=similar(key,0),
                   dest_data=nothing, i1=1)
     n = length(key)
@@ -180,7 +134,7 @@ function _groupby(f, key, data, perm, dest_key=similar(key,0),
         while i <= n && roweq(key, perm[i], perm[i1])
             i += 1
         end
-        val = _apply_many(f, data[perm[i1:(i-1)]])
+        val = _apply(f, data[perm[i1:(i-1)]])
         push!(dest_key, key[perm[i1]])
         if dest_data === nothing
             newdata = [val]

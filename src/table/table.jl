@@ -1,4 +1,4 @@
-import Base: setindex!, reduce
+import Base: setindex!, reduce, select
 import DataValues: dropna
 export NextTable, table, colnames, pkeynames, columns, pkeys, reindex, dropna
 
@@ -431,6 +431,9 @@ julia> excludecols([1,2,3], (1,))
 ```
 """
 function excludecols(t, cols)
+    if !isa(cols, Tuple)
+        return excludecols(t, (cols,))
+    end
     ns = colnames(t)
     mask = ones(Bool, length(ns))
     for c in cols
@@ -631,6 +634,12 @@ julia> pkeynames(t)
 function reindex end
 
 function reindex(T::Type, t, by, select; kwargs...)
+    if !isa(by, Tuple)
+        return reindex(T, t, (by,), select; kwargs...)
+    end
+    if !isa(select, Tuple)
+        return reindex(T, t, by, (select,); kwargs...)
+    end
     perm = sortpermby(t, by)
     if isa(perm, Base.OneTo)
         convert(T, rows(t, by), rows(t, select); presorted=true, kwargs...)

@@ -297,7 +297,7 @@ or a tuple of these types.
 keys(t::NDSparse, which...) = rows(keys(t), which...)
 
 # works for both NextTable and NDSparse
-primarykeys(t::NDSparse, which...) = keys(t, which...)
+pkeys(t::NDSparse, which...) = keys(t, which...)
 
 """
 `values(t)`

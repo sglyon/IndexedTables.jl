@@ -24,6 +24,9 @@ function best_perm_estimate(perms, cols)
 end
 
 function sortpermby(t, by; cache=true)
+    if !isa(by, Tuple)
+        by = (by,)
+    end
     canonorder = colindex(t, by)
     canonorder_vec = Int[canonorder...]
     perms = permcache(t)
