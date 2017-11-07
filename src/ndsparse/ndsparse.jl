@@ -22,7 +22,7 @@ Base.@deprecate_binding Table NDSparse
 
 
 """
-    ndsparse(indices, data; agg, presorted, copy, chunks)
+`ndsparse(indices, data; agg, presorted, copy, chunks)`
 
 Construct an NDSparse array with the given indices and data. Each vector in `indices` represents the index values for one dimension. On construction, the indices and data are sorted in lexicographic order of the indices.
 
@@ -436,7 +436,7 @@ t    │
 0.01 │ 4
 0.05 │ 6
 
-julia> vx = map(row->row.x/row.t, t, select=(:t,:x)) # note: you can also select an index column!
+julia> vx = map(row->row.x/row.t, x, select=(:t,:x)) # note: you can also select an index column!
 
 julia> polar = map(p->@NT(r=hypot(p.x + p.y), θ=atan2(p.y, p.x)), x)
 1-d NDSparse with 2 values (2 field named tuples):

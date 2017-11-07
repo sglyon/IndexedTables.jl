@@ -419,36 +419,6 @@ function _colindex(fnames::AbstractArray, col, default=nothing)
 end
 
 # const ColPicker = Union{Int, Symbol, Pair{Symbol=>Function}, Pair{Symbol=>AbstractVector}, AbstractVector}
-
-"""
-    column(itr, which)
-
-Returns single a column from `itr`. `which` can be either:
-
-- An integer - causes the column at that index to be returned
-
-```jldoctest
-```
-
-- A symbol - causes the column with that name to be returned
-
-```jldoctest
-```
-
-- A pair of symbol or int and a function - applies the function to every element in the column and returns it.
-
-```jldoctest
-```
-
-- A vector - the vector itself is returned, it must be of the same length as `itr`.
-
-```jldoctest
-```
-
-`itr` can be any of `Columns`, `AbstractVector`, `Table` or `NDSparse`.
-
-The right names to reference the columns in `itr` in selection (`which`) are the same as those returned by `colnames(itr)`.
-"""
 column(c, x) = columns(c)[colindex(c, x)]
 
 # optimized method
@@ -474,11 +444,7 @@ end
 """
 `columns(itr, which)`
 
-Returns a (named) tuple of columns from `itr`
-
-`which` can be:
-
-- A tuple of one or more of the above - returns a tuple of selected values
+Returns a vector or a tuple of vectors from the iterator.
 
 """
 columns(t, which) = column(t, which)
