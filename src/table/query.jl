@@ -40,7 +40,7 @@ function groupreduce(f, t::NextTable, by=pkeynames(t);
 
     dest_key = similar(key, 0)
 
-    fs, input, T = init_reduce(f, data, false)
+    fs, input, T = init_arrays(f, data, reduced_type, false)
     dest_data = similar(arrayof(T), 0)
 
     groupreduce_to!(fs, key, input, dest_key, dest_data, perm)
@@ -61,7 +61,7 @@ function groupby(f, t::NextTable, by=pkeynames(t); select=rows(t))
     data = rows(t, select)
 
     perm = sortpermby(t, by)
-    fs, input, T = init_reduce(f, data, true)
+    fs, input, T = init_arrays(f, data, reduced_type, true)
     # Note: we're not using T here, we'll let _groupby figure it out
     dest_key, dest_data = _groupby(fs, key, input, perm)
 

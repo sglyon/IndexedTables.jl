@@ -816,7 +816,7 @@ time  x
 """
 renamecol(t, name, newname) = @cols rename!(t, name, newname)
 
-## Utilities for reduction
+## Utilities for mapping and reduction with many functions / OnlineStats
 
 using OnlineStatsBase
 
@@ -841,9 +841,9 @@ function reduced_type(f, x, isvec)
     end
 end
 
-function init_reduce(f, x, isvec) # normal functions
+function init_inputs(f, x, gettype, isvec) # normal functions
     g = f isa OnlineStat ? Series(f) : f
-    g, x, reduced_type(g, x, isvec)
+    g, x, gettype(g, x, isvec)
 end
 
 nicename(f) = Symbol(f)
@@ -853,8 +853,17 @@ function nicename(s::Series)
                     typeof(s).parameters[2].parameters), :_))
 end
 
-function init_reduce(f::Tuple, input, isvec)
-    reducers = map(f) do g
+function mapped_type(f, x, isvec)
+    _promote_op(f, eltype(x))
+end
+
+function init_inputs(f::Tup, input, gettype, isvec)
+    if isa(f, NamedTuple)
+        return init_inputs((map(Pair, fieldnames(f), f)...),
+                            input, gettype, isvec)
+    end
+
+    funcmap = map(f) do g
         if isa(g, Pair)
             name = g[1]
             if isa(g[2], Pair)
@@ -870,13 +879,13 @@ function init_reduce(f::Tuple, input, isvec)
         end
     end
 
-    ns = map(x->x[1], reducers)
-    xs = map(x->x[2], reducers)
-    fs = map(map(x->x[3], reducers)) do f
+    ns = map(x->x[1], funcmap)
+    xs = map(x->x[2], funcmap)
+    fs = map(map(x->x[3], funcmap)) do f
         f isa OnlineStat ? Series(f) : f
     end
 
-    output_eltypes = map((f,x) -> reduced_type(f, x, isvec), fs, xs)
+    output_eltypes = map((f,x) -> gettype(f, x, isvec), fs, xs)
 
     NT = namedtuple(ns...)
 

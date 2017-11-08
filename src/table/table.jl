@@ -707,10 +707,9 @@ julia> map(sin, polar, select=:θ)
 function map(f, t::AbstractIndexedTable; select=rows(t)) end
 
 function map(f, t::NextTable; select=rows(t))
-    d = rows(t, select)
-    T = _promote_op(f, eltype(d))
+    fs, input, T = init_inputs(f, rows(t, select), mapped_type, false)
     x = similar(arrayof(T), length(t))
-    map!(f, x, d)
+    map!(a->_apply(fs, a), x, input)
     isa(x, Columns) ? table(x) : x
 end
 
