@@ -714,12 +714,10 @@ function map(f, t::NextTable; select=rows(t))
     isa(x, Columns) ? table(x) : x
 end
 
-using OnlineStatsBase
-
 """
 `reduce(f, t::Table; select)`
 
-Reduce `t` row-wise using `f`. Equivalent to `reduce(f, rows(t, select))`
+Reduce `t` row-wise using `f`.
 
 ```jldoctest
 julia> t = table([0.1, 0.5], [2,1], names=[:t, :x])
@@ -750,19 +748,21 @@ julia> reduce(Mean(), t, select=:t)
 ```
 """
 function reduce(f, t::NextTable; select=rows(t))
-    reduce(f, rows(t, select))
+    fs, input, T = init_reduce(f, rows(t, select), false)
+    _reduce(fs, input)
 end
 
 function reduce(f, t::NextTable, v0; select=rows(t))
-    reduce(f, rows(t, select), v0)
+    fs, input, T = init_reduce(f, rows(t, select), false)
+    reduce((x,y)->_apply(fs,x,y), input, v0)
 end
 
-function reduce(f::OnlineStat, t::NextTable; select=rows(t))
-    Series(columns(t, select), f)
-end
-
-function reduce(f::OnlineStat, t::NextTable, v0; select=rows(t))
-    merge(v0, Series(columns(t, select), f))
+function _reduce(fs, input)
+    acc = init_first(fs, input[1])
+    @inbounds @simd for i=2:length(input)
+        acc = _apply(fs, acc, input[i])
+    end
+    acc
 end
 
 function _nonna(t::Union{Columns, NextTable}, by=(colnames(t)...))

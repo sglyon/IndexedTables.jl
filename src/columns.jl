@@ -815,3 +815,63 @@ time  x
 ```
 """
 renamecol(t, name, newname) = @cols rename!(t, name, newname)
+
+## Utilities for reduction
+
+using OnlineStatsBase
+
+@inline _apply(f::Series, g, x) = fit!(g, x)
+@inline _apply(f::Tup, y::Tup, x::Tup) = map(_apply, f, y, x)
+@inline _apply(f, y, x) = f(y, x)
+@inline _apply(f::Tup, x::Tup) = map(_apply, f, x)
+@inline _apply(f, x) = f(x)
+
+@inline init_first(f, x) = x
+@inline init_first(f::Series, x) = (g=copy(f); fit!(g, x))
+@inline init_first(f::Tup, x::Tup) = map(init_first, f, x)
+
+# Initialize type of output, functions to apply, input and output vectors
+
+function reduced_type(f, x, isvec)
+    if isvec
+        _promote_op(f, typeof(x))
+    else
+        _promote_op((a,b)->_apply(f, init_first(f, a), b),
+                    eltype(x), eltype(x))
+    end
+end
+
+function init_reduce(f, x, isvec) # normal functions
+    g = f isa OnlineStat ? Series(f) : f
+    g, x, reduced_type(g, x, isvec)
+end
+
+function init_reduce(f::Tuple, input, isvec)
+    reducers = map(f) do g
+        if isa(g, Pair)
+            name = g[1]
+            if isa(g[2], Pair)
+                selector, fn = g[2]
+                vec = rows(input, selector)
+            else
+                vec = input
+                fn = g[2]
+            end
+            (name, vec, fn)
+        else
+            (Symbol(g), input, g)
+        end
+    end
+    ns = map(x->x[1], reducers)
+    xs = map(x->x[2], reducers)
+    fs = map(map(x->x[3], reducers)) do f
+        f isa OnlineStat ? Series(f) : f
+    end
+
+    output_eltypes = map((f,x) -> reduced_type(f, x, isvec), fs, xs)
+
+    NT = namedtuple(ns...)
+
+    # functions, input, output_eltype
+    NT(fs...), rows(NT(xs...)), NT{output_eltypes...}
+end
