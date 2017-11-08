@@ -31,8 +31,6 @@ const TableTrait = Union{AbstractVector, NextTable, NDSparse}
 
 const Dataset = Union{NextTable, NDSparse}
 
-include("sortperm.jl")
-
 # no-copy convert
 _convert(::Type{NextTable}, x::NextTable) = x
 function _convert(::Type{NDSparse}, t::NextTable)
@@ -46,9 +44,10 @@ function _convert(::Type{NextTable}, x::NDSparse)
             presorted=true, copy=false)
 end
 
-include("indexing.jl")
+include("sortperm.jl")
+include("indexing.jl") # x[y]
 include("selection.jl")
-include("groupby.jl")
+include("reduce.jl")
 include("flatten.jl")
 include("join.jl")
 

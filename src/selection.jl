@@ -3,6 +3,8 @@
 
 Select a single column or a subset of columns.
 
+# Selection
+
 `Selection` is a type union of many types that can select from a table. It can be:
 
 1. `Integer` -- returns the column at this position.
@@ -244,57 +246,6 @@ function map(f, t::NextTable; select=rows(t))
     isa(x, Columns) ? table(x) : x
 end
 
-"""
-`reduce(f, t::Table; select)`
-
-Reduce `t` row-wise using `f`.
-
-```jldoctest
-julia> t = table([0.1, 0.5], [2,1], names=[:t, :x])
-Table with 2 rows, 2 columns:
-t    x
-──────
-0.1  2
-0.5  1
-
-julia> reduce((y, x) ->map(+, y, x), t)
-(t = 0.6, x = 3)
-
-julia> reduce(+, t, select=:t)
-0.6
-```
-
-If you pass an OnlineStat object from the [OnlineStats](https://github.com/joshday/OnlineStats.jl) package,
-the statistic is computed.
-
-```jldoctest
-julia> using OnlineStats
-
-julia> reduce(Mean(), t, select=:t)
-▦ Series{0,Tuple{Mean},EqualWeight}
-┣━━ EqualWeight(nobs = 2)
-┗━━━┓
-    ┗━━ Mean(0.3)
-```
-"""
-function reduce(f, t::NextTable; select=rows(t))
-    fs, input, T = init_reduce(f, rows(t, select), false)
-    _reduce(fs, input)
-end
-
-function reduce(f, t::NextTable, v0; select=rows(t))
-    fs, input, T = init_reduce(f, rows(t, select), false)
-    reduce((x,y)->_apply(fs,x,y), input, v0)
-end
-
-function _reduce(fs, input)
-    acc = init_first(fs, input[1])
-    @inbounds @simd for i=2:length(input)
-        acc = _apply(fs, acc, input[i])
-    end
-    acc
-end
-
 function _nonna(t::Union{Columns, NextTable}, by=(colnames(t)...))
     indxs = [1:length(t);]
     if !isa(by, Tuple)
@@ -384,8 +335,8 @@ Filter rows in `t` according to `pred`. `select` choses the fields that act as i
 
 `pred` can be:
 
-- a function - selected structs or values are passed to this function
-- a tuple of column => function pairs: applies to each named column the corresponding function, keeps only rows where all such conditions are satisfied.
+- A function - selected structs or values are passed to this function
+- A tuple of `column => function` pairs: applies to each named column the corresponding function, keeps only rows where all such conditions are satisfied.
 
 ```jldoctest
 julia> t = table(["a","b","c"], [0.01, 0.05, 0.07], [2,1,0],

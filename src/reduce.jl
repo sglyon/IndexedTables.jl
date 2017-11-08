@@ -1,6 +1,137 @@
 using OnlineStatsBase
 export groupreduce, groupby
 
+"""
+`reduce(f, t::Table; select::Selection)`
+
+Reduce `t` by applying `f` pair-wise on values or structs
+selected by `select`.
+
+`f` can be:
+
+1. A function
+2. An OnlineStat
+3. A tuple of functions and/or OnlineStats
+4. A named tuple of functions and/or OnlineStats
+5. A named tuple of (selector => function or OnlineStat) pairs
+
+```jldoctest
+julia> t = table([0.1, 0.5, 0.75], [0,1,2], names=[:t, :x])
+Table with 3 rows, 2 columns:
+t     x
+───────
+0.1   0
+0.5   1
+0.75  2
+```
+
+When `f` is a function, it reduces the selection as usual:
+
+```
+julia> reduce(+, t, select=:t)
+1.35
+```
+
+If `select` is omitted, the rows themselves are passed to reduce as tuples.
+
+```jldoctest
+julia> reduce((a, b) -> @NT(t=a.t+b.t, x=a.x+b.x), t)
+(t = 1.35, x = 3)
+```
+
+If `f` is an OnlineStat object from the [OnlineStats](https://github.com/joshday/OnlineStats.jl) package, the statistic is computed on the selection.
+
+```jldoctest
+julia> using OnlineStats
+
+julia> reduce(Mean(), t, select=:t)
+▦ Series{0,Tuple{Mean},EqualWeight}
+┣━━ EqualWeight(nobs = 3)
+┗━━━┓
+    ┗━━ Mean(0.45)
+```
+
+# Reducing with multiple functions
+
+Often one needs many aggregate values from a table. This is when `f` can be passed as a tuple of functions:
+
+```jldoctest
+julia> y = reduce((min, max), t, select=:x)
+(min = 0, max = 2)
+
+julia> y.max
+2
+
+julia> y.min
+0
+```
+
+Note that the return value of invoking reduce with a tuple of functions
+will be a named tuple which has the function names as the keys. In the example, we reduced using `min` and `max` functions to obtain the minimum and maximum values in column `x`.
+
+If you want to give a different name to the fields in the output, use a named tuple as `f` instead:
+
+```jldoctest
+julia> y = reduce(@NT(sum=+, prod=*), t, select=:x)
+(sum = 3, prod = 0)
+```
+
+You can also compute many OnlineStats by passing tuple or named tuple of OnlineStat objects as the reducer.
+
+```jldoctest
+julia> y = reduce((Mean(), Variance()), t, select=:t)
+(Mean = ▦ Series{0,Tuple{Mean},EqualWeight}
+┣━━ EqualWeight(nobs = 3)
+┗━━━┓
+    ┗━━ Mean(0.45), Variance = ▦ Series{0,Tuple{Variance},EqualWeight}
+┣━━ EqualWeight(nobs = 3)
+┗━━━┓
+    ┗━━ Variance(0.1075))
+
+julia> y.Mean
+▦ Series{0,Tuple{Mean},EqualWeight}
+┣━━ EqualWeight(nobs = 3)
+┗━━━┓
+    ┗━━ Mean(0.45)
+
+julia> y.Variance
+▦ Series{0,Tuple{Variance},EqualWeight}
+┣━━ EqualWeight(nobs = 3)
+┗━━━┓
+    ┗━━ Variance(0.1075)
+```
+
+# Combining reduction and selection
+
+In the above section where we computed many reduced values at once, we have been using the same selection for all reducers, that specified by `select`. It's possible to select different inputs for different reducers by using a named tuple of `slector => function` pairs:
+
+```jldoctest
+julia> reduce(@NT(xsum=:x=>+, negtsum=(:t=>-)=>+), t)
+(xsum = 3, negtsum = -1.35)
+
+```
+
+See [`Selection`](@ref) for more on what selectors can be specified. Here since each output can select its own input, `select` keyword is unsually unnecessary. If specified, the slections in the reducer tuple will be done over the result of selecting with the `select` argument.
+
+"""
+function reduce(f, t::NextTable; select=rows(t))
+    fs, input, T = init_inputs(f, rows(t, select), reduced_type, false)
+    _reduce(fs, input)
+end
+
+function reduce(f, t::NextTable, v0; select=rows(t))
+    fs, input, T = init_reduce(f, rows(t, select), false)
+    reduce((x,y)->_apply(fs,x,y), input, v0)
+end
+
+function _reduce(fs, input)
+    acc = init_first(fs, input[1])
+    @inbounds @simd for i=2:length(input)
+        acc = _apply(fs, acc, input[i])
+    end
+    acc
+end
+
 ## groupreduce
 
 function groupreduce_to!(f, key, data, dest_key, dest_data, perm)
@@ -22,15 +153,69 @@ function groupreduce_to!(f, key, data, dest_key, dest_data, perm)
 end
 
 """
-`groupreduce(f, t[, by::Selection]; select::Selection, name)`
+`groupreduce(f, t[, by::Selection]; select::Selection)`
 
-Group rows by a given key (a [Selection](@ref)).
-Apply a function `f` on the rows pair-wise to reduce each group to a single value.
+Group rows by `by`, and apply `f` to reduce each group. `f` can be a function, OnlineStat or a struct of these as described in [`reduce`](@ref). Recommended: see documentation for [`reduce`](@ref) first. The result of reducing each group is put in a table keyed by unique `by` values, the names of the output columns are the same as the names of the fields of the reduced tuples.
+
+# Examples
+
+```jldoctest
+julia> groupreduce(+, t, :x, select=:z)
+Table with 2 rows, 2 columns:
+x  +
+─────
+1  6
+2  15
+
+julia> groupreduce(+, t, (:x, :y), select=:z)
+Table with 4 rows, 3 columns:
+x  y  +
+────────
+1  1  3
+1  2  3
+2  1  11
+2  2  4
+
+julia> groupreduce((+, min, max), t, (:x, :y), select=:z)
+Table with 4 rows, 5 columns:
+x  y  +   min  max
+──────────────────
+1  1  3   1    2
+1  2  3   3    3
+2  1  11  5    6
+2  2  4   4    4
+```
+
+If `f` is a single function or a tuple of functions, the output columns will be named the same as the functions themselves. To change the name, pass a named tuple:
+
+```jldoctest
+julia> groupreduce(@NT(zsum=+, zmin=min, zmax=max), t, (:x, :y), select=:z)
+Table with 4 rows, 5 columns:
+x  y  zsum  zmin  zmax
+──────────────────────
+1  1  3     1     2
+1  2  3     3     3
+2  1  11    5     6
+2  2  4     4     4
+```
+
+Finally, it's possible to select different inputs for different reducers by using a named tuple of `slector => function` pairs:
+
+```jldoctest
+julia> groupreduce(@NT(xsum=:x=>+, negysum=(:y=>-)=>+), t, :x)
+Table with 2 rows, 3 columns:
+x  xsum  negysum
+────────────────
+1  3     -4
+2  6     -4
+
+```
+
 """
 function groupreduce(f, t::NextTable, by=pkeynames(t);
-                     select=excludecols(t, by))
+                     select=rows(t))
 
-    if isa(f, Pair)
+    if !isa(f, Tup)
         return groupreduce((f,), t, by, select=select)
     end
     if !isa(by, Tuple)
@@ -42,7 +227,7 @@ function groupreduce(f, t::NextTable, by=pkeynames(t);
 
     dest_key = similar(key, 0)
 
-    fs, input, T = init_arrays(f, data, reduced_type, false)
+    fs, input, T = init_inputs(f, data, reduced_type, false)
     dest_data = similar(arrayof(T), 0)
 
     groupreduce_to!(fs, key, input, dest_key, dest_data, perm)
@@ -98,7 +283,7 @@ function groupby(f, t::NextTable, by=pkeynames(t); select=rows(t))
     data = rows(t, select)
 
     perm = sortpermby(t, by)
-    fs, input, T = init_arrays(f, data, reduced_type, true)
+    fs, input, T = init_inputs(f, data, reduced_type, true)
     # Note: we're not using T here, we'll let _groupby figure it out
     dest_key, dest_data = _groupby(fs, key, input, perm)
 

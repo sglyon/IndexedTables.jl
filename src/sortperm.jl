@@ -23,7 +23,7 @@ function best_perm_estimate(perms, cols)
     return (bestmatch, bestperm)
 end
 
-function sortpermby(t, by; cache=true)
+function sortpermby(t, by; cache=false)
     if !isa(by, Tuple)
         by = (by,)
     end
