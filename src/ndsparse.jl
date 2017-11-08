@@ -496,3 +496,49 @@ function convert{T}(::Type{NDSparse}, a::AbstractArray{T})
     end
     NDSparse(Columns(reverse(idxs)...), data, presorted=true)
 end
+
+# aggregation
+
+"""
+`aggregate!(f::Function, arr::NDSparse)`
+
+Combine adjacent rows with equal indices using the given 2-argument reduction function,
+in place.
+"""
+function aggregate!(f, x::NDSparse)
+    idxs, data = x.index, x.data
+    n = length(idxs)
+    newlen = 0
+    i1 = 1
+    while i1 <= n
+        val = data[i1]
+        i = i1+1
+        while i <= n && roweq(idxs, i, i1)
+            val = f(val, data[i])
+            i += 1
+        end
+        newlen += 1
+        if newlen != i1
+            copyrow!(idxs, newlen, i1)
+        end
+        data[newlen] = val
+        i1 = i
+    end
+    resize!(idxs, newlen)
+    resize!(data, newlen)
+    x
+end
+
+function valueselector(t)
+    if isa(values(t), Columns)
+        T = eltype(values(t))
+        if T<:NamedTuple
+            (fieldnames(T)...)
+        else
+            ((ndims(t) + (1:nfields(eltype(values(t)))))...)
+        end
+    else
+        ndims(t) + 1
+    end
+end
+

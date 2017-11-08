@@ -16,8 +16,8 @@ const DimName = Union{Int,Symbol}
 
 include("utils.jl")
 include("columns.jl")
-include("table/table.jl")
-include("ndsparse/ndsparse.jl")
+include("table.jl")
+include("ndsparse.jl")
 
 #=
 # Poor man's traits
@@ -46,21 +46,13 @@ function _convert(::Type{NextTable}, x::NDSparse)
             presorted=true, copy=false)
 end
 
-include("table/query.jl")
-include("table/join.jl")
-
-# getindex and setindex!
 include("indexing.jl")
-
-# query and aggregate
-include("query.jl")
-
-# joins
+include("selection.jl")
+include("groupby.jl")
+include("flatten.jl")
 include("join.jl")
 
 # TableTraits.jl integration
 include("tabletraits.jl")
-
-## New table type
 
 end # module
