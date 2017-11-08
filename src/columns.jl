@@ -846,6 +846,13 @@ function init_reduce(f, x, isvec) # normal functions
     g, x, reduced_type(g, x, isvec)
 end
 
+nicename(f) = Symbol(f)
+nicename(o::OnlineStat) = Symbol(typeof(o).name.name)
+function nicename(s::Series)
+    Symbol(join(map(x -> x.name.name,
+                    typeof(s).parameters[2].parameters), :_))
+end
+
 function init_reduce(f::Tuple, input, isvec)
     reducers = map(f) do g
         if isa(g, Pair)
@@ -859,9 +866,10 @@ function init_reduce(f::Tuple, input, isvec)
             end
             (name, vec, fn)
         else
-            (Symbol(g), input, g)
+            (nicename(g), input, g)
         end
     end
+
     ns = map(x->x[1], reducers)
     xs = map(x->x[2], reducers)
     fs = map(map(x->x[3], reducers)) do f
