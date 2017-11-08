@@ -53,6 +53,9 @@ function groupby(f, t::NextTable, by=pkeynames(t); select=rows(t))
     if !isa(by, Tuple)
         by=(by,) # this will help keep the column name
     end
+    if !isa(f, Tup)
+        f=(f,)
+    end
 
     key  = rows(t, by)
     data = rows(t, select)
@@ -65,15 +68,24 @@ function groupby(f, t::NextTable, by=pkeynames(t); select=rows(t))
     convert(NextTable, dest_key, dest_data)
 end
 
+struct SubArrClosure{R}
+    r::R
+end
+
+(f::SubArrClosure)(x) = SubArray(x, f.r)
+
 function _groupby(f, key, data, perm, dest_key=similar(key,0),
                   dest_data=nothing, i1=1)
     n = length(key)
+    cs = columns(data)
     while i1 <= n
         i = i1+1
         while i <= n && roweq(key, perm[i], perm[i1])
             i += 1
         end
-        val = _apply(f, data[perm[i1:(i-1)]])
+        # needed this hack to avoid allocations. i loses type info
+        #val = _apply(f, map(x->SubArray(x, (perm[i1:(i-1)],)), cs))
+        val = _apply(f, map(SubArrClosure((perm[i1:(i-1)],)), cs))
         push!(dest_key, key[perm[i1]])
         if dest_data === nothing
             newdata = [val]
