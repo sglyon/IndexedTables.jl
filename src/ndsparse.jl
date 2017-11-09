@@ -143,7 +143,7 @@ end
 
 function ndsparse(::Val{:serial}, ks::Tup, vs::Union{Tup, AbstractVector};
                   agg=nothing, presorted=false,
-                  chunks=nothing, copy=false)
+                  chunks=nothing, copy=true)
 
     I = rows(ks)
     d = vs isa Tup ? Columns(vs) : vs
@@ -168,8 +168,8 @@ function ndsparse(::Val{:serial}, ks::Tup, vs::Union{Tup, AbstractVector};
             d = Base.copy(d)
         end
     end
-    stripnames(x) = rows(astuple(columns(x)))
-    _table = convert(NextTable, stripnames(I), stripnames(d); presorted=true, copy=false)
+    stripnames(x) = isa(x, Columns) ? rows(astuple(columns(x))) : rows((x,))
+    _table = convert(NextTable, I, stripnames(d); presorted=true, copy=false)
     nd = NDSparse{eltype(d),astuple(eltype(I)),typeof(I),typeof(d)}(
         I, d, _table, similar(I,0), similar(d,0)
     )
@@ -231,6 +231,22 @@ julia> pkeynames(x)
 ```
 """
 pkeynames(t::NDSparse) = (dimlabels(t)...)
+
+# For an NDSparse, valuenames is either a tuple of fieldnames or a
+# single name for scalar values
+function valuenames(t::NDSparse)
+    if isa(values(t), Columns)
+        T = eltype(values(t))
+        if T<:NamedTuple
+            (fieldnames(T)...)
+        else
+            ((ndims(t) + (1:nfields(eltype(values(t)))))...)
+        end
+    else
+        ndims(t) + 1
+    end
+end
+
 
 """
 `NDSparse(columns...; names=Symbol[...], kwargs...)`
@@ -313,7 +329,16 @@ Returns a array of rows from a subset of columns
 of the values in `t`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
 or a tuple of these types.
 """
-values(t::NDSparse, which...) = rows(values(t), which...)
+function values(t::NDSparse, which)
+    if values(t) isa Columns
+        rows(values(t), which)
+    else
+        if which != 1
+            error("column $which not found")
+        end
+        values(t)
+    end
+end
 
 ## Some array-like API
 
@@ -396,6 +421,8 @@ function deserialize(s::AbstractSerializer, ::Type{SerializedNDSparse})
     d = deserialize(s)
     NDSparse(I, d, presorted=true)
 end
+
+convert(::Type{NDSparse}, ks, vs; kwargs...) = ndsparse(ks, vs; kwargs...)
 
 # map and convert
 
@@ -529,16 +556,6 @@ function aggregate!(f, x::NDSparse)
     x
 end
 
-function valueselector(t)
-    if isa(values(t), Columns)
-        T = eltype(values(t))
-        if T<:NamedTuple
-            (fieldnames(T)...)
-        else
-            ((ndims(t) + (1:nfields(eltype(values(t)))))...)
-        end
-    else
-        ndims(t) + 1
-    end
+function subtable(x::NDSparse, idx)
+    ndsparse(keys(x)[idx], values(x)[idx])
 end
-

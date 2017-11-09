@@ -51,11 +51,11 @@ import IndexedTables: primaryperm, sortpermby, best_perm_estimate
     # x=[1,1,1,2,2], y=[1,1,2,2,2], z=[7,4,6,5,3]
     @test column(t, :z) == [7,4,6,5,3]
     @test issorted(rows(t, (:x,:y)))
-    @test sortpermby(t, (:y, :z)) == [2,1,5,4,3]
+    @test sortpermby(t, (:y, :z), cache=true) == [2,1,5,4,3]
     @test t.perms[1].perm == [2,1,5,4,3]
     perms = [primaryperm(t), t.perms;]
 
-    @test sortpermby(t, (:y, :x), cache=false) == [2,1,3,5,4]
+    @test sortpermby(t, (:y, :x)) == [2,1,3,5,4]
     @test length(t.perms) == 1
 
     # fully known
@@ -74,11 +74,11 @@ end
     a = table([12,21,32], [52,41,34], [11,53,150], pkey=[1,2])
     b = table([12,23,32], [52,43,34], [56,13,10], pkey=[1,2])
 
-    c = select(a, 1=>x->x<30, 2=>x->x>40)
+    c = filter((1=>x->x<30, 2=>x->x>40), a)
     @test rows(c) == [(12,52,11), (21,41,53)]
     @test c.pkey == [1,2]
 
-    c = select(a, 1, 2)
+    c = select(a, (1, 2))
     @test c == table(column(a, 1), column(a, 2))
     @test c.pkey == [1,2]
 end
@@ -88,8 +88,7 @@ end
     b = table(Columns(a=[1, 1, 2], b=[3, 2, 2], c=[4, 5, 2]), pkey=(1,2))
 
     @test groupreduce(min, a, select=3) == a
-    @test groupreduce(min, b, select=3) == b
-    @test rows(groupreduce(min, b, 2, select=3)) == Columns(b=[2,3], c=[2,4])
+    @test groupreduce(min, b, select=3) == renamecol(b, :c, :min)
 end
 
 @testset "groupby" begin
@@ -98,16 +97,16 @@ end
                 c=[1, 4, 3, 5, 2, 0])
 
     a = table(x, pkey=[1,2], presorted=true)
-    @test groupby(maximum, a, select=3) == table(Columns(a=[1, 1], b=[2, 3], c=[4, 5]))
+    @test groupby(maximum, a, select=3) == table(Columns(a=[1, 1], b=[2, 3], maximum=[4, 5]))
 
-    @test groupby([maximum, minimum], a, select=3) ==
+    @test groupby((maximum, minimum), a, select=3) ==
                 table(Columns(a=[1, 1], b=[2, 3],
                                   maximum=[4, 5], minimum=[1, 0]))
 
-    @test groupby(length, a, select=3, name=:length) ==
+    @test groupby(:length => length, a, select=3) ==
                 table(Columns(a=[1, 1], b=[2, 3], length=[3, 3]))
 
-    @test groupby([maximum, minimum], a, select=3, name=[:max, :min]) ==
+    @test groupby(@NT(max=maximum, min=minimum), a, select=3) ==
                 table(Columns(a=[1, 1], b=[2, 3],
                                   max=[4, 5], min=[1, 0]))
 end

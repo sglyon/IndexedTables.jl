@@ -106,7 +106,7 @@ julia> colnames(ndsparse(Columns(x=[1,2,3]), Columns([3,4,5],[6,7,8])))
 function colnames end
 
 Base.@pure colnames(t::AbstractVector) = [1]
-columns(v::AbstractVector) = (v,)
+columns(v::AbstractVector) = v
 
 Base.@pure colnames(t::Columns) = fieldnames(eltype(t))
 
@@ -487,6 +487,9 @@ or a tuple of these types.
 """
 rows(t, which...) = rows(columns(t, which...))
 
+_cols(xs::Columns) = columns(xs)
+_cols(xs::AbstractArray) = (xs,)
+concat_cols(xs, ys) = rows(concat_tup(_cols(xs), _cols(ys)))
 
 ## Mutable Columns Dictionary
 

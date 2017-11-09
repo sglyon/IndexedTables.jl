@@ -355,6 +355,9 @@ function pkeynames(t::AbstractIndexedTable)
     end
 end
 
+# for a table, selecting the "value" means selecting all fields
+valuenames(t::AbstractIndexedTable) = (colnames(t)...)
+
 """
     pkeys(itr::Table)
 
@@ -463,7 +466,7 @@ x  y  z
 ```
 """
 function convert(::Type{NextTable}, key, val; kwargs...)
-    cs = Columns(concat_tup(columns(key), columns(val)))
+    cs = concat_cols(key, val)
     table(cs, pkey=[1:ncols(key);]; kwargs...)
 end
 

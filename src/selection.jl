@@ -131,6 +131,19 @@ function Base.select(t::AbstractIndexedTable, which)
     ColDict(t)[which]
 end
 
+# optimization
+@inline function Base.select(t::NextTable, which::Union{Symbol, Int})
+    getfield(columns(t), which)
+end
+
+function selectkeys(x::NDSparse, which; kwargs...)
+    convert(NDSparse, rows(keys(x), which), values(x); kwargs...)
+end
+
+function selectvalues(x::NDSparse, which; kwargs...)
+    convert(NDSparse, keys(x), rows(values(x), which); kwargs...)
+end
+
 """
 `reindex(itr, by[, select])`
 
@@ -237,9 +250,15 @@ julia> map(sin, polar, select=:θ)
 
 ```
 """
-function map(f, t::AbstractIndexedTable; select=rows(t)) end
+function map(f, t::AbstractIndexedTable; select=nothing) end
 
-function map(f, t::NextTable; select=rows(t))
+function map(f, t::Dataset; select=nothing)
+    if isa(f, Tup) && select===nothing
+        select = colnames(t)
+    elseif select === nothing
+        select = valuenames(t)
+    end
+
     fs, input, T = init_inputs(f, rows(t, select), mapped_type, false)
     x = similar(arrayof(T), length(t))
     map!(a->_apply(fs, a), x, input)
@@ -319,14 +338,14 @@ julia> typeof(column(dropna(t,:x), :x))
 Array{Int64,1}
 ```
 """
-function dropna(t::Union{Columns, NextTable}, by=(colnames(t)...))
+function dropna(t::Union{Columns, Dataset}, by=(colnames(t)...))
     subtable(_nonna(t, by)...)
 end
 
 filt_by_col!(f, col, indxs) = filter!(i->f(col[i]), indxs)
 
 Base.@deprecate select(arr::NDSparse, conditions::Pair...) filter(conditions, arr)
-Base.@deprecate select(arr::NDSparse, which::DimName...; agg=nothing) reindex(arr, which; agg=agg)
+Base.@deprecate select(arr::NDSparse, which::DimName...; agg=nothing) selectkeys(arr, which; agg=agg)
 
 """
 `filter(pred, t; select)`
@@ -392,30 +411,25 @@ n    t     x
 ```
 
 """
-function Base.filter(fn, t::Dataset; select=rows(t))
+function Base.filter(fn, t::Dataset; select=valuenames(t))
     x = rows(t, select)
     indxs = filter(i->fn(x[i]), eachindex(x))
-    t[indxs]
+    subtable(t, indxs)
 end
 
-function Base.filter(pred::Tuple, t::Dataset; select=values(t))
+function Base.filter(pred::Tuple, t::Dataset; select=nothing)
     indxs = [1:length(t);]
-    x = rows(t, select)
+    x = select === nothing ? t : rows(t, select)
     for (c,f) in pred
         filt_by_col!(f, rows(x, c), indxs)
     end
     subtable(t, indxs)
 end
 
-function Base.filter(pred::Pair, t::Dataset; select=values(t))
-    filter([pred], t, select=select)
+function Base.filter(pred::Pair, t::Dataset; select=nothing)
+    filter((pred), t, select=select)
 end
 
-# Filter on data field
-function Base.filter(fn::Function, arr::NDSparse)
-    flush!(arr)
-    data = arr.data
-    indxs = filter(i->fn(data[i]), eachindex(data))
-    NDSparse(Columns(map(x->x[indxs], arr.index.columns)), data[indxs], presorted=true)
+function Base.filter(pred::NamedTuple, t::Dataset; select=nothing)
+    filter((zip(fieldnames(pred), pred)...), t, select=select)
 end
-

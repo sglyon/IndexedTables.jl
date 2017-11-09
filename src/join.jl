@@ -154,7 +154,7 @@ nullrow(t::Type{<:Tuple}) = tuple(map(x->x(), [t.parameters...])...)
 nullrow(t::Type{<:NamedTuple}) = t(map(x->x(), [t.parameters...])...)
 nullrow(t::Type{<:DataValue}) = t()
 
-function _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
+function init_join_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
     lnull = nothing
     rnull = nothing
     loutput = nothing
@@ -184,7 +184,7 @@ function _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumul
             # this is for optimizations in _push!
             loutput = similar(arrayof(left_type), 0)
             routput = similar(arrayof(right_type), 0)
-            data = rows(concat_tup(columns(loutput), columns(routput)))
+            data = concat_cols(loutput, routput)
         else
             out_type = _promote_op(f, left_type, right_type)
             data = similar(arrayof(out_type), 0)
@@ -212,11 +212,13 @@ function _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumul
     _sizehint!(similar(lkey,0), guess), _sizehint!(data, guess), loutput, routput, lnull, rnull, init_group, accumulate
 end
 
-function Base.join(f, left::NextTable, right::NextTable;
+function Base.join(f, left::Dataset, right::Dataset;
                    how=:inner, group=false,
                    lkey=pkeynames(left), rkey=pkeynames(right),
-                   lselect=excludecols(left, lkey),
-                   rselect=excludecols(right, rkey),
+                   lselect=isa(left, NDSparse) ?
+                       valuenames(left) : excludecols(left, lkey),
+                   rselect=isa(right, NDSparse) ?
+                       valuenames(right) : excludecols(right, lkey),
                    init_group=nothing,
                    accumulate=nothing,
                    cache=true)
@@ -231,16 +233,21 @@ function Base.join(f, left::NextTable, right::NextTable;
     rdata = rows(right, rselect)
 
     typ, grp = Val{how}(), Val{group}()
-    I, data, lout, rout, lnull, rnull, init_group, accumulate = _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
+    I, data, lout, rout, lnull, rnull, init_group, accumulate =
+        init_join_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
 
     _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
            lkey, rkey, ldata, rdata, lperm, rperm, init_group, accumulate)
 
-    convert(NextTable, I, data, presorted=true, copy=false)
+    convert(collectiontype(left), I, data, presorted=true, copy=false)
 end
 
-function Base.join(left::NextTable, right::NextTable; kwargs...)
+function Base.join(left::Dataset, right::Dataset; kwargs...)
     join(concat_tup, left, right; kwargs...)
+end
+
+function groupjoin(left::Dataset, right::Dataset; kwargs...)
+    join(concat_tup, left, right; group=true, kwargs...)
 end
 
 for (fn, how) in [:naturaljoin =>     (:inner, false, concat_tup),
@@ -263,36 +270,7 @@ for (fn, how) in [:naturaljoin =>     (:inner, false, concat_tup),
         $fn($f, left, right; kwargs...)
     end
 end
-export naturaljoin, innerjoin, leftjoin, asofjoin, leftjoin!
-
-function Base.join(f, left::NDSparse, right::NDSparse;
-                   how=:inner, group=false,
-                   lkey=pkeynames(left), rkey=pkeynames(right),
-                   lselect=valueselector(left),
-                   rselect=valueselector(right),
-                   init_group=nothing,
-                   accumulate=nothing,
-                   cache=true)
-
-    lperm = sortpermby(left, lkey; cache=cache)
-    rperm = sortpermby(right, rkey; cache=cache)
-
-    lkey = rows(left, lkey)
-    rkey = rows(right, rkey)
-
-    ldata = rows(left, lselect)
-    rdata = rows(right, rselect)
-
-    typ, grp = Val{how}(), Val{group}()
-
-    I, data, lout, rout, lnull, rnull, init_group, accumulate =
-        _init_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, accumulate)
-
-    _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
-           lkey, rkey, ldata, rdata, lperm, rperm, init_group, accumulate)
-
-    NDSparse(I, data, presorted=true, copy=false)
-end
+export naturaljoin, innerjoin, leftjoin, asofjoin, leftjoin!, groupjoin
 
 ## Joins
 
