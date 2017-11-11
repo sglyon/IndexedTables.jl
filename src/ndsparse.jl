@@ -35,6 +35,7 @@ Construct an NDSparse array with the given indices and data. Each vector in `ind
 
 # Examples:
 
+1-dimensional NDSparse can be constructed with a single array as index.
 ```jldoctest
 julia> x = ndsparse(["a","b"],[3,4])
 1-d NDSparse with 2 values (Int64):
@@ -46,6 +47,10 @@ julia> x = ndsparse(["a","b"],[3,4])
 julia> keytype(x), eltype(x)
 (Tuple{String}, Int64)
 
+```
+
+A dimension will be named if constructed with a named tuple of columns as index.
+```jldoctest
 julia> x = ndsparse(@NT(date=Date.(2014:2017)), [4:7;])
 1-d NDSparse with 4 values (Int64):
 date       │
@@ -55,12 +60,20 @@ date       │
 2016-01-01 │ 6
 2017-01-01 │ 7
 
+```
+
+```jldoctest
 julia> x[Date("2015-01-01")]
 5
 
 julia> keytype(x), eltype(x)
 (Tuple{Date}, Int64)
 
+```
+
+Multi-dimensional `NDSparse` can be constructed by passing a tuple of index columns:
+
+```jldoctest
 julia> x = ndsparse((["a","b"],[3,4]), [5,6])
 2-d NDSparse with 2 values (Int64):
 1    2 │
@@ -73,7 +86,11 @@ julia> keytype(x), eltype(x)
 
 julia> x["a", 3]
 5
+```
 
+The data itself can also contain tuples (these are stored in columnar format, just like in `table`.)
+
+```jldoctest
 julia> x = ndsparse((["a","b"],[3,4]), ([5,6], [7.,8.]))
 2-d NDSparse with 2 values (2-tuples):
 1    2 │ 3  4
@@ -81,7 +98,8 @@ julia> x = ndsparse((["a","b"],[3,4]), ([5,6], [7.,8.]))
 "a"  3 │ 5  7.0
 "b"  4 │ 6  8.0
 
-julia> x = ndsparse(@NT(x=["a","a","b"],y=[3,4,4]), @NT(p=[5,6,7], q=[8.,9.,10.]))
+julia> x = ndsparse(@NT(x=["a","a","b"],y=[3,4,4]),
+                    @NT(p=[5,6,7], q=[8.,9.,10.]))
 2-d NDSparse with 3 values (2 field named tuples):
 x    y │ p  q
 ───────┼────────
@@ -296,40 +314,24 @@ Base.@deprecate itable(x, y) ndsparse(x, y)
 
 # Keys and Values iterators
 
-"""
-`keys(t::NDSparse)`
-
-Returns an array of the keys in `t` as tuples or named tuples.
-"""
 keys(t::NDSparse) = t.index
-
 """
-`keys(t, which...)`
+`keys(x::NDSparse[, select::Selection])`
 
-Returns a array of rows from a subset of columns
-in the index of `t`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
-or a tuple of these types.
+Get the keys of an `NDSparse` object. Same as [`rows`](@ref) but acts only on the index columns of the `NDSparse`.
 """
 keys(t::NDSparse, which...) = rows(keys(t), which...)
 
 # works for both NextTable and NDSparse
 pkeys(t::NDSparse, which...) = keys(t, which...)
 
-"""
-`values(t)`
-
-Returns an array of values stored in `t`.
-"""
 values(t::NDSparse) = t.data
-
 """
-`values(t, which...)`
+`values(x::NDSparse[, select::Selection])`
 
-Returns a array of rows from a subset of columns
-of the values in `t`. `which` is either an `Int`, `Symbol` or [`As`](@ref)
-or a tuple of these types.
+Get the values of an `NDSparse` object. Same as [`rows`](@ref) but acts only on the value columns of the `NDSparse`.
 """
-function values(t::NDSparse, which)
+function values(t::NDSparse, which...)
     if values(t) isa Columns
         rows(values(t), which)
     else
@@ -463,7 +465,12 @@ t    │
 0.01 │ 4
 0.05 │ 6
 
-julia> vx = map(row->row.x/row.t, x, select=(:t,:x)) # note: you can also select an index column!
+julia> vx = map(row->row.x/row.t, x, select=(:t,:x))
+1-d NDSparse with 2 values (Float64):
+t    │
+─────┼──────
+0.01 │ 100.0
+0.05 │ 40.0
 
 julia> polar = map(p->@NT(r=hypot(p.x + p.y), θ=atan2(p.y, p.x)), x)
 1-d NDSparse with 2 values (2 field named tuples):

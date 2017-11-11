@@ -1,9 +1,9 @@
+export dropna
+
 """
 `select(t::Table, which::Selection)`
 
-Select a single column or a subset of columns.
-
-# Selection
+Select all or a subset of columns, or a single column from the table.
 
 `Selection` is a type union of many types that can select from a table. It can be:
 
@@ -137,22 +137,23 @@ end
 end
 
 function selectkeys(x::NDSparse, which; kwargs...)
-    convert(NDSparse, rows(keys(x), which), values(x); kwargs...)
+    ndsparse(rows(keys(x), which), values(x); kwargs...)
 end
 
 function selectvalues(x::NDSparse, which; kwargs...)
-    convert(NDSparse, keys(x), rows(values(x), which); kwargs...)
+    ndsparse(keys(x), rows(values(x), which); kwargs...)
 end
 
 """
-`reindex(itr, by[, select])`
+`reindex(t::Table, by[, select])`
 
-Reindex `itr` (a Table or NDSparse) by columns selected in `by`.
-Keeps columns selected by `select` columns as non-indexed columns.
+Reindex `t` by columns selected in `by`.
+Keeps columns selected by `select` as non-indexed columns.
 By default all columns not mentioned in `by` are kept.
 
-```jldoctest
+Use [`selectkeys`](@ref) to reindex and NDSparse object.
 
+```jldoctest
 julia> t = table([2,1],[1,3],[4,5], names=[:x,:y,:z], pkey=(1,2))
 
 julia> reindex(t, (:y, :z))
@@ -183,7 +184,7 @@ function reindex(T::Type, t, by, select; kwargs...)
     if !isa(by, Tuple)
         return reindex(T, t, (by,), select; kwargs...)
     end
-    if !isa(select, Tuple)
+    if T <: NextTable && !isa(select, Tuple)
         return reindex(T, t, by, (select,); kwargs...)
     end
     perm = sortpermby(t, by)
@@ -195,7 +196,7 @@ function reindex(T::Type, t, by, select; kwargs...)
 end
 
 function reindex(t::NextTable, by=pkeynames(t), select=excludecols(t, by); kwargs...)
-    reindex(NextTable, t, by, select; kwargs...)
+    reindex(collectiontype(t), t, by, select; kwargs...)
 end
 
 canonname(t, x::Symbol) = x
@@ -348,7 +349,7 @@ Base.@deprecate select(arr::NDSparse, conditions::Pair...) filter(conditions, ar
 Base.@deprecate select(arr::NDSparse, which::DimName...; agg=nothing) selectkeys(arr, which; agg=agg)
 
 """
-`filter(pred, t; select)`
+`filter(pred, t::Union{NextTable, NDSparse}; select)`
 
 Filter rows in `t` according to `pred`. `select` choses the fields that act as input to `pred`.
 
@@ -357,6 +358,7 @@ Filter rows in `t` according to `pred`. `select` choses the fields that act as i
 - A function - selected structs or values are passed to this function
 - A tuple of `column => function` pairs: applies to each named column the corresponding function, keeps only rows where all such conditions are satisfied.
 
+By default, `filter` iterates a table a row at a time:
 ```jldoctest
 julia> t = table(["a","b","c"], [0.01, 0.05, 0.07], [2,1,0],
                  names=[:n, :t, :x])
@@ -367,13 +369,37 @@ n    t     x
 "b"  0.05  1
 "c"  0.07  0
 
-julia> filter(p->p.x/p.t < 100, t)
+julia> filter(p->p.x/p.t < 100, t) # whole row
 Table with 2 rows, 3 columns:
 n    t     x
 ────────────
 "b"  0.05  1
 "c"  0.07  0
 
+```
+
+By default, `filter` iterates by values of an `NDSparse`:
+
+```jldoctest
+julia> x = ndsparse(@NT(n=["a","b","c"], t=[0.01, 0.05, 0.07]), [2,1,0])
+2-d NDSparse with 3 values (Int64):
+n    t    │
+──────────┼──
+"a"  0.01 │ 2
+"b"  0.05 │ 1
+"c"  0.07 │ 0
+
+julia> filter(y->y<2, x)
+2-d NDSparse with 2 values (Int64):
+n    t    │
+──────────┼──
+"b"  0.05 │ 1
+"c"  0.07 │ 0
+```
+
+If select is specified. (See [Selection convention](@ref select)) then, the selected values will be iterated instead.
+
+```jldoctest
 julia> filter(p->p.x/p.t < 100, t, select=(:x,:t))
 Table with 2 rows, 3 columns:
 n    t     x
@@ -381,7 +407,18 @@ n    t     x
 "b"  0.05  1
 "c"  0.07  0
 ```
-Although the two examples do the same thing, the second one will allocate structs of only `x` and `y` fields to be passed to the predicate function. This results in better performance because we aren't allocating a struct with a string object.
+Aside: Although the two examples do the same thing, the second one will allocate structs of only `x` and `y` fields to be passed to the predicate function. This results in better performance because we aren't allocating a struct with a string object.
+
+`select` works similarly for `NDSparse`:
+```jldoctest
+julia> filter(p->p[2]/p[1] < 100, x, select=(:t, 3))
+2-d NDSparse with 2 values (Int64):
+n    t    │
+──────────┼──
+"b"  0.05 │ 1
+"c"  0.07 │ 0
+```
+Here 3 represents the third column, which is the values, `p` is a tuple of `t` field and the value.
 
 ```jldoctest
 julia> filter(iseven, t, select=:x)
@@ -397,16 +434,30 @@ n    t     x
 ────────────
 "a"  0.01  2
 "c"  0.07  0
+
+julia> filter(iseven, x) # the value col is default in NDSparse
+2-d NDSparse with 2 values (Int64):
+n    t    │
+──────────┼──
+"a"  0.01 │ 2
+"c"  0.07 │ 0
+
 ```
 
-Filtering by a single column is convenient.
+Filtering by many single columns is convenient:
 
 ```jldoctest
-julia> filter((:x=>iseven, :t => a->a>0.01), t)
+julia> filter((:x=>iseven, :t=>a->a>0.01), t)
 Table with 1 rows, 3 columns:
 n    t     x
 ────────────
 "c"  0.07  0
+
+julia> filter((3=>iseven, :t=>a->a>0.01), x) # NDSparse
+2-d NDSparse with 1 values (Int64):
+n    t    │
+──────────┼──
+"c"  0.07 │ 0
 
 ```
 
@@ -420,16 +471,23 @@ end
 function Base.filter(pred::Tuple, t::Dataset; select=nothing)
     indxs = [1:length(t);]
     x = select === nothing ? t : rows(t, select)
-    for (c,f) in pred
-        filt_by_col!(f, rows(x, c), indxs)
+    for p in pred
+        if isa(p, Pair)
+            c, f = p
+            filt_by_col!(f, rows(x, c), indxs)
+        else
+            filt_by_col!(f, x, indxs)
+        end
     end
     subtable(t, indxs)
 end
 
 function Base.filter(pred::Pair, t::Dataset; select=nothing)
-    filter((pred), t, select=select)
+    filter((pred,), t, select=select)
 end
 
+# We discard names of fields in a named tuple. keeps it consistent
+# with map and reduce, we don't select using those
 function Base.filter(pred::NamedTuple, t::Dataset; select=nothing)
-    filter((zip(fieldnames(pred), pred)...), t, select=select)
+    filter(astuple(pred), t, select=select)
 end

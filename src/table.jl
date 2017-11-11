@@ -34,7 +34,7 @@ struct NextTable{C<:Columns} <: AbstractIndexedTable
 end
 
 """
-`table(cols::AbstractVector...; names, pkey, presorted, copy, chunks)`
+`table(cols::AbstractVector...; names, <options>)`
 
 Create a table with columns given by `cols`.
 ```jldoctest
@@ -60,7 +60,9 @@ x  y
 
 ```
 
-`table(cols::Union{Tuple, NamedTuple}; pkey, presorted, copy, chunks)`
+`table(cols::Union{Tuple, NamedTuple}; <options>)`
+
+Convert a struct of columns to a table of structs.
 
 ```jldoctest
 julia> table(([1,2,3], [4,5,6])) == a
@@ -70,11 +72,9 @@ julia> table(@NT(x=[1,2,3], y=[4,5,6])) == b
 true
 ```
 
-Convert a struct of columns to a table of structs.
+`table(cols::Columns; <options>)`
 
-`table(cols::Columns; pkey, presorted, copy, chunks)`
-
-Construct a table from a vector of tuples. See [`rows`](@ref) for constructing `Columns` object.
+Construct a table from a vector of tuples. See [`rows`](@ref).
 
 ```jldoctest
 julia> table(Columns([1,2,3], [4,5,6])) == a
@@ -84,7 +84,7 @@ julia> table(Columns(x=[1,2,3], y=[4,5,6])) == b
 true
 ```
 
-`table(t::Union{Table, NDSparse}; pkey=pkeynames(t), presorted=true, copy, chunks)`
+`table(t::Union{Table, NDSparse}; <options>)`
 
 Copy a Table or NDSparse to create a new table. The same primary keys as the input are used.
 
@@ -94,7 +94,7 @@ true
 ```
 
 
-# Arguments:
+# Options:
 
 - `pkey`: select columns to act as the primary key. By default, no columns are used as primary key.
 - `presorted`: is the data pre-sorted by primary key columns? If so, skip sorting. `false` by default. Irrelevant if `chunks` is specified.
@@ -114,7 +114,8 @@ x  y
 2  4
 3  5
 
-julia> b = table([2,1,2,1],[2,3,1,3],[4,5,6,7], names=[:x, :y, :z], pkey=(:x,:y))
+julia> b = table([2,1,2,1],[2,3,1,3],[4,5,6,7],
+                 names=[:x, :y, :z], pkey=(:x,:y))
 Table with 4 rows, 3 columns:
 x  y  z
 ───────
@@ -125,10 +126,17 @@ x  y  z
 ```
 Note that the keys do not have to be unique.
 
-`chunks` attribute allows you to create a distributed table. Note this argument needs the JuliaDB package to be loaded.
+`chunks` option creates a distributed table.
+
+`chunks` can be:
+
+1. An integer -- number of chunks to create
+2. An vector of `k` integers -- number of elements in each of the `k` chunks.
+3. The distribution of another array. i.e. `vec.subdomains` where `vec` is a distributed array.
 
 ```jldoctest
-julia> t = table([2,3,1,4], [4,5,6,7], names=[:x, :y], pkey=:x, chunks=2)
+julia> t = table([2,3,1,4], [4,5,6,7],
+                  names=[:x, :y], pkey=:x, chunks=2)
 Distributed Table with 4 rows in 2 chunks:
 x  y
 ────
@@ -154,7 +162,8 @@ x  y
 3  7
 4  8
 
-julia> table(columns(t)..., [9,10,11,12], names=[:x,:y,:z])
+julia> table(columns(t)..., [9,10,11,12],
+             names=[:x,:y,:z])
 Distributed Table with 4 rows in 2 chunks:
 x  y  z
 ────────
@@ -550,10 +559,22 @@ function showmeta(io, t, cnames)
     showtable(io, metat, cnames=["#", "colname", "type"], cstyle=fill(:bold, nc), full=true)
 end
 
+function subscriptprint(x::Integer)
+    s = string(x)
+    cs = Char[]
+    lookup = ["₀₁₂₃₄₅₆₇₈₉"...]
+    join([lookup[parse(Int, c)+1] for c in s],"")
+end
+
 function show(io::IO, t::NextTable{T}) where {T}
     header = "Table with $(length(t)) rows, $(length(columns(t))) columns:"
     cstyle = Dict([i=>:bold for i in t.pkey])
-    showtable(io, t, header=header, cstyle=cstyle)
+    cnames = string.(colnames(t))
+    for (i, k) in enumerate(t.pkey)
+        cstyle[k] = :bold
+        #cnames[k] = cnames[k] * "$(subscriptprint(i))"
+    end
+    showtable(io, t, header=header, cnames=cnames, cstyle=cstyle)
 end
 
 function Base.merge(a::NextTable, b::NextTable)

@@ -111,14 +111,41 @@ columns(v::AbstractVector) = v
 Base.@pure colnames(t::Columns) = fieldnames(eltype(t))
 
 """
-    columns(itr)
+`columns(itr[, select::Selection])`
 
-Return all columns in the iterator `itr`. Works on `Columns`, `Table`,
-`NDSparse` and `AbstractVector`, and their [distributed counterparts](@distributed).
+Select one or more columns from an iterable of rows as a tuple of vectors.
+
+`select` specifies which columns to select. See [`Selection convention`](@ref select) for possible values. If unspecified, returns all columns.
+
+`itr` can be `NDSparse`, `Columns` and `AbstractVector`, and their distributed counterparts.
+
+# Examples
 
 ```jldoctest
+julia> t = table([1,2],[3,4], names=[:x,:y])
+Table with 2 rows, 2 columns:
+x  y
+────
+1  3
+2  4
+
+julia> columns(t)
+(x = [1, 2], y = [3, 4])
+
+julia> columns(t, :x)
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> columns(t, (:x,))
+(x = [1, 2])
+
+julia> columns(t, (:y,:x=>-))
+(y = [3, 4], x = [-1, -2])
 ```
 """
+function columns end
+
 columns(c) = error("no columns defined for $(typeof(c))")
 columns(c::Columns) = c.columns
 
@@ -129,7 +156,7 @@ length(c::Columns) = length(c.columns[1])
 ndims(c::Columns) = 1
 
 """
-    ncols(itr)
+`ncols(itr)`
 
 Returns the number of columns in `itr`.
 
@@ -470,21 +497,57 @@ function colname(c, col)
 end
 
 """
-`rows(t)`
+`rows(itr[, select::Selection])`
 
-Returns an array of rows in the table `t`. Keys and values
-are merged into a contiguous tuple / named tuple.
+Select one or more fields from an iterable of rows as a vector of their values.
+
+`select` specifies which fields to select. See [`Selection convention`](@ref select) for possible values. If unspecified, returns all columns.
+
+`itr` can be `NDSparse`, `Columns` and `AbstractVector`, and their distributed counterparts.
+
+# Examples
+
+```jldoctest
+julia> t = table([1,2],[3,4], names=[:x,:y])
+Table with 2 rows, 2 columns:
+x  y
+────
+1  3
+2  4
+
+julia> rows(t)
+2-element IndexedTables.Columns{NamedTuples._NT_x_y{Int64,Int64},NamedTuples._NT_x_y{Array{Int64,1},Array{Int64,1}}}:
+ (x = 1, y = 3)
+ (x = 2, y = 4)
+
+julia> rows(t, :x)
+2-element Array{Int64,1}:
+ 1
+ 2
+
+julia> rows(t, (:x,))
+2-element IndexedTables.Columns{NamedTuples._NT_x{Int64},NamedTuples._NT_x{Array{Int64,1}}}:
+ (x = 1)
+ (x = 2)
+
+julia> rows(t, (:y,:x=>-))
+2-element IndexedTables.Columns{NamedTuples._NT_y_x{Int64,Int64},NamedTuples._NT_y_x{Array{Int64,1},Array{Int64,1}}}:
+ (y = 3, x = -1)
+ (y = 4, x = -2)
+```
+Note that vectors of tuples returned are `Columns` object and have columnar internal storage.
 """
+function rows end
+
 rows(x::AbstractVector) = x
-rows(cols::Tup) = Columns(cols)
+function rows(cols::Tup)
+    if nfields(cols) === 0
+        error("Cannot construct rows with 0 columns")
+    else
+        Columns(cols)
+    end
+end
 
-"""
-`rows(t, which)`
-
-Returns an array of rows in a subset of columns in `t`
-identified by `which`. `which` is either an `Int`, `Symbol` or `Pair`
-or a tuple of these types.
-"""
 rows(t, which...) = rows(columns(t, which...))
 
 _cols(xs::Columns) = columns(xs)
@@ -507,12 +570,6 @@ Create a mutable dictionary of columns in `t`.
 
 To get the immutable iterator of the same type as `t`
 call `d[]`
-
-# Examples:
-
-```jldoctest
-
-```
 """
 ColDict(t) = ColDict(Int[], t, copy(colnames(t)), Any[columns(t)...])
 
@@ -619,11 +676,11 @@ end
 # Modifying a columns
 
 """
-    setcol(t::Table, col::Union{Symbol, Int}, x)
+`setcol(t::Table, col::Union{Symbol, Int}, x)`
 
 Sets a `x` as the column identified by `col`. Returns a new table.
 
-    setcol(t::Table, map::Pair...)
+`setcol(t::Table, map::Pair...)`
 
 Set many columns at a time.
 
@@ -678,7 +735,7 @@ false
 setcol(t, col, x) = @cols setindex!(t, x, col)
 
 """
-    pushcol(t, name, x)
+`pushcol(t, name, x)`
 
 Push a column `x` to the end of the table. `name` is the name for the new column. Returns a new table.
 
@@ -704,7 +761,7 @@ t     x  y  z
 pushcol(t, name, x) = @cols push!(t, name, x)
 
 """
-    popcol(t, col)
+`popcol(t, col)`
 
 Remove the column `col` from the table. Returns a new table.
 
@@ -727,7 +784,7 @@ t     y
 popcol(t, name) = @cols pop!(t, name)
 
 """
-    insertcol(t, position::Integer, name, x)
+`insertcol(t, position::Integer, name, x)`
 
 Insert a column `x` named `name` at `position`. Returns a new table.
 
@@ -751,7 +808,7 @@ t     w  x  y
 insertcol(t, i::Integer, name, x) = @cols insert!(t, i, name, x)
 
 """
-    insertcolafter(t, after, name, col)
+`insertcolafter(t, after, name, col)`
 
 Insert a column `col` named `name` after `after`. Returns a new table.
 
@@ -774,7 +831,7 @@ t     w  x  y
 insertcolafter(t, after, name, x) = @cols insertafter!(t, after, name, x)
 
 """
-    insertcolbefore(t, before, name, col)
+`insertcolbefore(t, before, name, col)`
 
 Insert a column `col` named `name` before `before`. Returns a new table.
 
@@ -797,7 +854,7 @@ t     w  x  y
 insertcolbefore(t, before, name, x) = @cols insertbefore!(t, before, name, x)
 
 """
-    renamecol(t, col, newname)
+`renamecol(t, col, newname)`
 
 Set `newname` as the new name for column `col` in `t`. Returns a new table.
 
