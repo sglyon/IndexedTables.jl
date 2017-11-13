@@ -36,7 +36,7 @@ Construct an NDSparse array with the given indices and data. Each vector in `ind
 # Examples:
 
 1-dimensional NDSparse can be constructed with a single array as index.
-```jldoctest
+```jldoctest ndsparse
 julia> x = ndsparse(["a","b"],[3,4])
 1-d NDSparse with 2 values (Int64):
 1   │
@@ -50,7 +50,7 @@ julia> keytype(x), eltype(x)
 ```
 
 A dimension will be named if constructed with a named tuple of columns as index.
-```jldoctest
+```jldoctest ndsparse
 julia> x = ndsparse(@NT(date=Date.(2014:2017)), [4:7;])
 1-d NDSparse with 4 values (Int64):
 date       │
@@ -62,7 +62,7 @@ date       │
 
 ```
 
-```jldoctest
+```jldoctest ndsparse
 julia> x[Date("2015-01-01")]
 5
 
@@ -73,7 +73,7 @@ julia> keytype(x), eltype(x)
 
 Multi-dimensional `NDSparse` can be constructed by passing a tuple of index columns:
 
-```jldoctest
+```jldoctest ndsparse
 julia> x = ndsparse((["a","b"],[3,4]), [5,6])
 2-d NDSparse with 2 values (Int64):
 1    2 │
@@ -90,7 +90,7 @@ julia> x["a", 3]
 
 The data itself can also contain tuples (these are stored in columnar format, just like in `table`.)
 
-```jldoctest
+```jldoctest ndsparse
 julia> x = ndsparse((["a","b"],[3,4]), ([5,6], [7.,8.]))
 2-d NDSparse with 2 values (2-tuples):
 1    2 │ 3  4
@@ -121,7 +121,7 @@ x    y │ p  q
 
 Passing a `chunks` option to `ndsparse`, or constructing with a distributed array will cause the result to be distributed. Use `distribute` function to distribute an array.
 
-```jldoctest
+```jldoctest ndsparse
 julia> x = ndsparse(@NT(date=Date.(2014:2017)), [4:7.;], chunks=2)
 1-d Distributed NDSparse with 4 values (Float64) in 2 chunks:
 date       │
@@ -131,7 +131,7 @@ date       │
 2016-01-01 │ 6.0
 2017-01-01 │ 7.0
 
-julia> x = ndsparse(@NT(date=Date.(2014:2017)), distribute([4:7;], 2))
+julia> x = ndsparse(@NT(date=Date.(2014:2017)), distribute([4:7.0;], 2))
 1-d Distributed NDSparse with 4 values (Float64) in 2 chunks:
 date       │
 ───────────┼────

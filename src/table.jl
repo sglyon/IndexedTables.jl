@@ -37,7 +37,7 @@ end
 `table(cols::AbstractVector...; names, <options>)`
 
 Create a table with columns given by `cols`.
-```jldoctest
+```jldoctest table
 julia> a = table([1,2,3], [4,5,6])
 Table with 3 rows, 2 columns:
 1  2
@@ -49,7 +49,7 @@ Table with 3 rows, 2 columns:
 
 `names` specify names for columns. If specified, the table will be an iterator of named tuples.
 
-```jldoctest
+```jldoctest table
 julia> b = table([1,2,3], [4,5,6], names=[:x, :y])
 Table with 3 rows, 2 columns:
 x  y
@@ -64,7 +64,7 @@ x  y
 
 Convert a struct of columns to a table of structs.
 
-```jldoctest
+```jldoctest table
 julia> table(([1,2,3], [4,5,6])) == a
 true
 
@@ -76,7 +76,7 @@ true
 
 Construct a table from a vector of tuples. See [`rows`](@ref).
 
-```jldoctest
+```jldoctest table
 julia> table(Columns([1,2,3], [4,5,6])) == a
 true
 
@@ -88,7 +88,7 @@ true
 
 Copy a Table or NDSparse to create a new table. The same primary keys as the input are used.
 
-```jldoctest
+```jldoctest table
 julia> b == table(b)
 true
 ```
@@ -105,7 +105,7 @@ true
 
 Specifying `pkey` will cause the table to be sorted by the columns named in pkey:
 
-```jldoctest
+```jldoctest table
 julia> b = table([2,3,1], [4,5,6], names=[:x, :y], pkey=:x)
 Table with 3 rows, 2 columns:
 x  y
@@ -134,7 +134,7 @@ Note that the keys do not have to be unique.
 2. An vector of `k` integers -- number of elements in each of the `k` chunks.
 3. The distribution of another array. i.e. `vec.subdomains` where `vec` is a distributed array.
 
-```jldoctest
+```jldoctest table
 julia> t = table([2,3,1,4], [4,5,6,7],
                   names=[:x, :y], pkey=:x, chunks=2)
 Distributed Table with 4 rows in 2 chunks:
@@ -149,7 +149,7 @@ x  y
 A distributed table will be constructed if one of the arrays passed into `table` constructor is a distributed
 array. A distributed Array can be constructed using `distribute`:
 
-```jldoctest
+```jldoctest table
 
 julia> x = distribute([1,2,3,4], 2);
 
@@ -335,7 +335,7 @@ Names of the primary key columns in `t`.
 
 # Example
 
-```jldoctest
+```jldoctest pkeynames
 
 julia> t = table([1,2], [3,4]);
 
@@ -376,7 +376,7 @@ a default key of tuples `(1,):(n,)` is generated.
 
 # Example
 
-```jldoctest
+```jldoctest pkeys
 
 julia> a = table(["a","b"], [3,4]) # no pkey
 Table with 2 rows, 2 columns:
@@ -420,7 +420,7 @@ Base.values(t::NextTable) = rows(t)
 Names of all columns in `itr` except `cols`. `itr` can be any of
 `Table`, `NDSparse`, `Columns`, or `AbstractVector`
 
-```jldoctest
+```jldoctest excludecols
 julia> t = table([2,1],[1,3],[4,5], names=[:x,:y,:z], pkey=(1,2))
 Table with 2 rows, 3 columns:
 x  y  z

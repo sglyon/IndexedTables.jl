@@ -15,7 +15,7 @@ selected by `select`.
 4. A named tuple of functions and/or OnlineStats
 5. A named tuple of (selector => function or OnlineStat) pairs
 
-```jldoctest
+```jldoctest reduce
 julia> t = table([0.1, 0.5, 0.75], [0,1,2], names=[:t, :x])
 Table with 3 rows, 2 columns:
 t     x
@@ -34,14 +34,14 @@ julia> reduce(+, t, select=:t)
 
 If `select` is omitted, the rows themselves are passed to reduce as tuples.
 
-```jldoctest
+```jldoctest reduce
 julia> reduce((a, b) -> @NT(t=a.t+b.t, x=a.x+b.x), t)
 (t = 1.35, x = 3)
 ```
 
 If `f` is an OnlineStat object from the [OnlineStats](https://github.com/joshday/OnlineStats.jl) package, the statistic is computed on the selection.
 
-```jldoctest
+```jldoctest reduce
 julia> using OnlineStats
 
 julia> reduce(Mean(), t, select=:t)
@@ -55,7 +55,7 @@ julia> reduce(Mean(), t, select=:t)
 
 Often one needs many aggregate values from a table. This is when `f` can be passed as a tuple of functions:
 
-```jldoctest
+```jldoctest reduce
 julia> y = reduce((min, max), t, select=:x)
 (min = 0, max = 2)
 
@@ -71,14 +71,14 @@ will be a named tuple which has the function names as the keys. In the example, 
 
 If you want to give a different name to the fields in the output, use a named tuple as `f` instead:
 
-```jldoctest
+```jldoctest reduce
 julia> y = reduce(@NT(sum=+, prod=*), t, select=:x)
 (sum = 3, prod = 0)
 ```
 
 You can also compute many OnlineStats by passing tuple or named tuple of OnlineStat objects as the reducer.
 
-```jldoctest
+```jldoctest reduce
 julia> y = reduce((Mean(), Variance()), t, select=:t)
 (Mean = ▦ Series{0,Tuple{Mean},EqualWeight}
 ┣━━ EqualWeight(nobs = 3)
@@ -105,7 +105,7 @@ julia> y.Variance
 
 In the above section where we computed many reduced values at once, we have been using the same selection for all reducers, that specified by `select`. It's possible to select different inputs for different reducers by using a named tuple of `slector => function` pairs:
 
-```jldoctest
+```jldoctest reduce
 julia> reduce(@NT(xsum=:x=>+, negtsum=(:t=>-)=>+), t)
 (xsum = 3, negtsum = -1.35)
 
@@ -159,7 +159,7 @@ Group rows by `by`, and apply `f` to reduce each group. `f` can be a function, O
 
 # Examples
 
-```jldoctest
+```jldoctest groupreduce
 julia> t=table([1,1,1,2,2,2], [1,1,2,2,1,1], [1,2,3,4,5,6],
                names=[:x,:y,:z]);
 
@@ -191,7 +191,7 @@ x  y  +   min  max
 
 If `f` is a single function or a tuple of functions, the output columns will be named the same as the functions themselves. To change the name, pass a named tuple:
 
-```jldoctest
+```jldoctest groupreduce
 julia> groupreduce(@NT(zsum=+, zmin=min, zmax=max), t, (:x, :y), select=:z)
 Table with 4 rows, 5 columns:
 x  y  zsum  zmin  zmax
@@ -204,7 +204,7 @@ x  y  zsum  zmin  zmax
 
 Finally, it's possible to select different inputs for different reducers by using a named tuple of `slector => function` pairs:
 
-```jldoctest
+```jldoctest groupreduce
 julia> groupreduce(@NT(xsum=:x=>+, negysum=(:y=>-)=>+), t, :x)
 Table with 2 rows, 3 columns:
 x  xsum  negysum
@@ -291,7 +291,10 @@ Group rows by `by`, and apply `f` to each group. `f` can be a function or a tupl
 
 # Examples
 
-```jldoctest
+```jldoctest groupby
+julia> t=table([1,1,1,2,2,2], [1,1,2,2,1,1], [1,2,3,4,5,6],
+               names=[:x,:y,:z]);
+
 julia> groupby(mean, t, :x, select=:z)
 Table with 2 rows, 2 columns:
 x  mean
@@ -320,7 +323,7 @@ x  y  mean
 
 multiple aggregates can be computed by passing a tuple of functions:
 
-```jldoctest
+```jldoctest groupby
 julia> groupby((mean, std, var), t, :y, select=:z)
 Table with 2 rows, 4 columns:
 y  mean  std       var
@@ -339,7 +342,7 @@ y  q25   q50  q75
 
 Finally, it's possible to select different inputs for different functions by using a named tuple of `slector => function` pairs:
 
-```jldoctest
+```jldoctest groupby
 julia> groupby(@NT(xmean=:z=>mean, ystd=(:y=>-)=>std), t, :x)
 Table with 2 rows, 3 columns:
 x  xmean  ystd

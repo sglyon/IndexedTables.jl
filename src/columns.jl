@@ -676,7 +676,7 @@ end
 # Modifying a columns
 
 """
-`setcol(t::Table, col::Union{Symbol, Int}, x)`
+`setcol(t::Table, col::Union{Symbol, Int}, x::Selection)`
 
 Sets a `x` as the column identified by `col`. Returns a new table.
 
@@ -686,7 +686,7 @@ Set many columns at a time.
 
 # Examples:
 
-```jldoctest
+```jldoctest setcol
 julia> t = table([1,2], [3,4], names=[:x, :y])
 Table with 2 rows, 2 columns:
 x  y
@@ -701,7 +701,12 @@ x  y
 1  5
 2  6
 
-julia> setcol(t, 2=>[5,6], :x=>1./column(t, 1))
+```
+
+`x` can be any selection that transforms existing columns.
+
+```jldoctest setcol
+julia> setcol(t, :x, :x => x->1/x)
 Table with 2 rows, 2 columns:
 x    y
 ──────
@@ -712,7 +717,7 @@ x    y
 
 `setcol` will result in a re-sorted copy if a primary key column is replaced.
 
-```jldoctest
+```jldoctest setcol
 julia> t = table([0.01, 0.05], [1,2], [3,4], names=[:t, :x, :y], pkey=:t)
 Table with 2 rows, 3 columns:
 t     x  y
@@ -790,14 +795,14 @@ Insert a column `x` named `name` at `position`. Returns a new table.
 
 ```jldoctest
 julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
-Distributed Table with 2 rows in 2 chunks:
+Table with 2 rows, 3 columns:
 t     x  y
 ──────────
 0.01  2  3
 0.05  1  4
 
 julia> insertcol(t, 2, :w, [0,1])
-Distributed Table with 2 rows in 2 chunks:
+Table with 2 rows, 4 columns:
 t     w  x  y
 ─────────────
 0.01  0  2  3
@@ -814,14 +819,14 @@ Insert a column `col` named `name` after `after`. Returns a new table.
 
 ```jldoctest
 julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
-Distributed Table with 2 rows in 2 chunks:
+Table with 2 rows, 3 columns:
 t     x  y
 ──────────
 0.01  2  3
 0.05  1  4
 
 julia> insertcolafter(t, :t, :w, [0,1])
-Distributed Table with 2 rows in 2 chunks:
+Table with 2 rows, 4 columns:
 t     w  x  y
 ─────────────
 0.01  0  2  3
@@ -837,14 +842,14 @@ Insert a column `col` named `name` before `before`. Returns a new table.
 
 ```jldoctest
 julia> t = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
-Distributed Table with 2 rows in 2 chunks:
+Table with 2 rows, 3 columns:
 t     x  y
 ──────────
 0.01  2  3
 0.05  1  4
 
 julia> insertcolbefore(t, :x, :w, [0,1])
-Distributed Table with 2 rows in 2 chunks:
+Table with 2 rows, 4 columns:
 t     w  x  y
 ─────────────
 0.01  0  2  3

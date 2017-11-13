@@ -17,7 +17,7 @@ Select all or a subset of columns, or a single column from the table.
 
 Selection with `Integer` -- returns the column at this position.
 
-```jldoctest
+```jldoctest select
 julia> tbl = table([0.01, 0.05], [2,1], [3,4], names=[:t, :x, :y], pkey=:t)
 Table with 2 rows, 3 columns:
 t     x  y
@@ -34,7 +34,7 @@ julia> select(tbl, 2)
 
 Selection with `Symbol` -- returns the column with this name.
 
-```jldoctest
+```jldoctest select
 julia> select(tbl, :t)
 2-element Array{Float64,1}:
  0.01
@@ -44,22 +44,17 @@ julia> select(tbl, :t)
 
 Selection with `Pair{Selection => Function}` -- selects some columns and maps a function over it, then returns the mapped column.
 
-```jldoctest
+```jldoctest select
 julia> select(tbl, :t=>t->1/t)
 2-element Array{Float64,1}:
  100.0
-  20.0
-
-julia> vx = select(tbl, (:x, :t)=>p->p.x/p.t) # see selection with Tuple
-2-element Array{Float64,1}:
- 200.0
   20.0
 
 ```
 
 Selection with `AbstractArray` -- returns the array itself.
 
-```jldoctest
+```jldoctest select
 julia> select(tbl, [3,4])
 2-element Array{Int64,1}:
  3
@@ -68,13 +63,18 @@ julia> select(tbl, [3,4])
 ```
 Selection with `Tuple`-- returns a table containing a column for every selector in the tuple.
 
-```jldoctest
+```jldoctest select
 julia> select(tbl, (2,1))
 Table with 2 rows, 2 columns:
 x  t
 ───────
 2  0.01
 1  0.05
+
+julia> vx = select(tbl, (:x, :t)=>p->p.x/p.t)
+2-element Array{Float64,1}:
+ 200.0
+  20.0
 
 julia> select(tbl, (:x,:t=>-))
 Table with 2 rows, 2 columns:
@@ -89,7 +89,7 @@ key column will retain its status as a key. The same applies when multiple key c
 
 Selection with a custom array in the tuple will cause the name of the columns to be removed and replaced with integers.
 
-```jldoctest
+```jldoctest select
 julia> select(tbl, (:x, :t, [3,4]))
 Table with 2 rows, 3 columns:
 1  2     3
@@ -103,7 +103,7 @@ returns an iterable of tuples rather than named tuples. In other words, it strip
 
 To specify a new name to a custom column, you can use `Symbol => Selection` selector.
 
-```jldoctest
+```jldoctest select
 julia> select(tbl, (:x,:t,:z=>[3,4]))
 Table with 2 rows, 3 columns:
 x  t     z
@@ -153,7 +153,7 @@ By default all columns not mentioned in `by` are kept.
 
 Use [`selectkeys`](@ref) to reindex and NDSparse object.
 
-```jldoctest
+```jldoctest reindex
 julia> t = table([2,1],[1,3],[4,5], names=[:x,:y,:z], pkey=(1,2))
 
 julia> reindex(t, (:y, :z))
@@ -199,6 +199,10 @@ function reindex(t::NextTable, by=pkeynames(t), select=excludecols(t, by); kwarg
     reindex(collectiontype(t), t, by, select; kwargs...)
 end
 
+function reindex(t::NDSparse, by=pkeynames(t), select=valuenames(t); kwargs...)
+    reindex(collectiontype(t), t, by, select; kwargs...)
+end
+
 canonname(t, x::Symbol) = x
 canonname(t, x::Int) = colnames(t)[colindex(t, x)]
 
@@ -213,7 +217,7 @@ If not, returns a vector.
 
 # Examples
 
-```jldoctest
+```jldoctest map
 julia> t = table([0.01, 0.05], [1,2], [3,4], names=[:t, :x, :y])
 Table with 2 rows, 3 columns:
 t     x  y
@@ -237,7 +241,7 @@ r    θ
 
 `select` argument selects a subset of columns while iterating.
 
-```jldoctest
+```jldoctest map
 
 julia> vx = map(row->row.x/row.t, t, select=(:t,:x)) # row only cotains t and x
 2-element Array{Float64,1}:
@@ -293,7 +297,7 @@ end
 
 Drop rows which contain NA values.
 
-```jldoctest
+```jldoctest dropna
 julia> t = table([0.1, 0.5, NA,0.7], [2,NA,4,5], [NA,6,NA,7],
                   names=[:t,:x,:y])
 Table with 4 rows, 3 columns:
@@ -312,7 +316,7 @@ t    x  y
 ```
 Optionally `select` can be speicified to limit columns to look for NAs in.
 
-```jldoctest
+```jldoctest dropna
 
 julia> dropna(t, :y)
 Table with 2 rows, 3 columns:
@@ -359,7 +363,7 @@ Filter rows in `t` according to `pred`. `select` choses the fields that act as i
 - A tuple of `column => function` pairs: applies to each named column the corresponding function, keeps only rows where all such conditions are satisfied.
 
 By default, `filter` iterates a table a row at a time:
-```jldoctest
+```jldoctest filter
 julia> t = table(["a","b","c"], [0.01, 0.05, 0.07], [2,1,0],
                  names=[:n, :t, :x])
 Table with 3 rows, 3 columns:
@@ -380,7 +384,7 @@ n    t     x
 
 By default, `filter` iterates by values of an `NDSparse`:
 
-```jldoctest
+```jldoctest filter
 julia> x = ndsparse(@NT(n=["a","b","c"], t=[0.01, 0.05, 0.07]), [2,1,0])
 2-d NDSparse with 3 values (Int64):
 n    t    │
@@ -399,7 +403,14 @@ n    t    │
 
 If select is specified. (See [Selection convention](@ref select)) then, the selected values will be iterated instead.
 
-```jldoctest
+```jldoctest filter
+julia> filter(iseven, t, select=:x)
+Table with 2 rows, 3 columns:
+n    t     x
+────────────
+"a"  0.01  2
+"c"  0.07  0
+
 julia> filter(p->p.x/p.t < 100, t, select=(:x,:t))
 Table with 2 rows, 3 columns:
 n    t     x
@@ -407,10 +418,9 @@ n    t     x
 "b"  0.05  1
 "c"  0.07  0
 ```
-Aside: Although the two examples do the same thing, the second one will allocate structs of only `x` and `y` fields to be passed to the predicate function. This results in better performance because we aren't allocating a struct with a string object.
 
 `select` works similarly for `NDSparse`:
-```jldoctest
+```jldoctest filter
 julia> filter(p->p[2]/p[1] < 100, x, select=(:t, 3))
 2-d NDSparse with 2 values (Int64):
 n    t    │
@@ -420,33 +430,9 @@ n    t    │
 ```
 Here 3 represents the third column, which is the values, `p` is a tuple of `t` field and the value.
 
-```jldoctest
-julia> filter(iseven, t, select=:x)
-Table with 2 rows, 3 columns:
-n    t     x
-────────────
-"a"  0.01  2
-"c"  0.07  0
+Filtering by many single columns can be done by passing a tuple of `column_name => function` pairs.
 
-julia> filter((:x=>iseven,), t, select=:x)
-Table with 2 rows, 3 columns:
-n    t     x
-────────────
-"a"  0.01  2
-"c"  0.07  0
-
-julia> filter(iseven, x) # the value col is default in NDSparse
-2-d NDSparse with 2 values (Int64):
-n    t    │
-──────────┼──
-"a"  0.01 │ 2
-"c"  0.07 │ 0
-
-```
-
-Filtering by many single columns is convenient:
-
-```jldoctest
+```jldoctest filter
 julia> filter((:x=>iseven, :t=>a->a>0.01), t)
 Table with 1 rows, 3 columns:
 n    t     x
