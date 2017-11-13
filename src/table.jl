@@ -576,9 +576,3 @@ function show(io::IO, t::NextTable{T}) where {T}
     end
     showtable(io, t, header=header, cnames=cnames, cstyle=cstyle)
 end
-
-function Base.merge(a::NextTable, b::NextTable)
-    @assert colnames(a) == colnames(b)
-    @assert a.pkey == b.pkey
-    table(map(vcat, columns(a), columns(b)), pkey=a.pkey, copy=false)
-end

@@ -555,6 +555,32 @@ Base.@deprecate leftjoin(left::NDSparse, right::NDSparse, op::Function) leftjoin
 
 # asof join
 
+"""
+`asofjoin(left::NDSparse, right::NDSparse)`
+
+asofjoin is most useful on two time-series.
+It joins rows from `left` with the "most recent" value from `right`.
+
+```jldoctest
+julia> x = ndsparse((["ko","ko", "xrx","xrx"],
+                     Date.(["2017-11-11", "2017-11-12",
+                            "2017-11-11", "2017-11-12"])), [1,2,3,4]);
+
+julia> y = ndsparse((["ko","ko", "xrx","xrx"],
+                     Date.(["2017-11-12", "2017-11-13",
+                            "2017-11-10", "2017-11-13"])), [5,6,7,8])
+
+julia> asofjoin(x,y)
+2-d NDSparse with 4 values (Int64):
+1      2          │
+──────────────────┼──
+"ko"   2017-11-11 │ 1
+"ko"   2017-11-12 │ 5
+"xrx"  2017-11-11 │ 7
+"xrx"  2017-11-12 │ 7
+```
+
+"""
 function asofjoin(left::NDSparse, right::NDSparse)
     flush!(left); flush!(right)
     lI, rI = left.index, right.index
@@ -682,6 +708,85 @@ function _merge!(K, data, x::NDSparse, y::NDSparse, agg)
         k += 1
     end
     NDSparse(K, data, presorted=true)
+end
+
+
+"""
+`merge(a::Union{Table, NDSparse}, a::Union{Table, NDSparse})`
+
+Merge rows from two datasets while keeping them ordered by primary keys.
+
+# Examples:
+
+```jldoctest
+julia> a = table([1,3,5], [1,2,3], names=[:x,:y], pkey=:x)
+Table with 3 rows, 2 columns:
+x  y
+────
+1  1
+3  2
+5  3
+
+julia> b = table([2,3,4], [1,2,3], names=[:x,:y], pkey=:x)
+Table with 3 rows, 2 columns:
+x  y
+────
+2  1
+3  2
+4  3
+
+julia> merge(a,b)
+Table with 6 rows, 2 columns:
+x  y
+────
+1  1
+2  1
+3  2
+3  2
+4  3
+5  3
+
+```
+
+When merging two NDSparse objects, if the same key is present in both inputs, the value from the second input is chosen.
+
+```jldoctest merge
+julia> a = ndsparse([1,3,5], [1,2,3]);
+
+julia> b = ndsparse([2,3,4], [1,2,3]);
+
+julia> merge(a,b)
+1-d NDSparse with 5 values (Int64):
+1 │
+──┼──
+1 │ 1
+2 │ 1
+3 │ 2
+4 │ 3
+5 │ 3
+
+```
+
+However, you can pass the `agg` keyword argument to combine the values with a custom function.
+
+```jldoctest
+julia> merge(a,b,agg=+)
+1-d NDSparse with 5 values (Int64):
+1 │
+──┼──
+1 │ 1
+2 │ 1
+3 │ 4
+4 │ 3
+5 │ 3
+```
+"""
+function Base.merge(a::Dataset, b) end
+
+function Base.merge(a::NextTable, b::NextTable)
+    @assert colnames(a) == colnames(b)
+    @assert a.pkey == b.pkey
+    table(map(vcat, columns(a), columns(b)), pkey=a.pkey, copy=false)
 end
 
 function merge(x::NDSparse, xs::NDSparse...; agg = nothing)
@@ -863,6 +968,60 @@ dimensions of `j` should have `dimmap[i]==0`.
 
 If `dimmap` is not specified, it is determined automatically using index column
 names and types.
+
+```jldoctest bcast
+julia> a = ndsparse(([1,1,2,2], [1,2,1,2]), [1,2,3,4])
+2-d NDSparse with 4 values (Int64):
+1  2 │
+─────┼──
+1  1 │ 1
+1  2 │ 2
+2  1 │ 3
+2  2 │ 4
+
+julia> b = ndsparse([1,2], [1/1, 1/2])
+1-d NDSparse with 2 values (Float64):
+1 │
+──┼────
+1 │ 1.0
+2 │ 0.5
+
+julia> broadcast(*, a, b)
+2-d NDSparse with 4 values (Float64):
+1  2 │
+─────┼────
+1  1 │ 1.0
+1  2 │ 2.0
+2  1 │ 1.5
+2  2 │ 2.0
+```
+
+The `.`-broadcast syntax works with NDSparse:
+```jldoctest bcast
+julia> a.*b
+2-d NDSparse with 4 values (Float64):
+1  2 │
+─────┼────
+1  1 │ 1.0
+1  2 │ 2.0
+2  1 │ 1.5
+2  2 │ 2.0
+```
+
+`dimmap` maps dimensions that should be broadcasted:
+
+```jldoctest bcast
+
+julia> broadcast(*, a, b, dimmap=(0,1))
+2-d NDSparse with 4 values (Float64):
+1  2 │
+─────┼────
+1  1 │ 1.0
+1  2 │ 1.0
+2  1 │ 3.0
+2  2 │ 2.0
+
+```
 """
 function broadcast(f::Function, A::NDSparse, B::NDSparse; dimmap=nothing)
     out_T = _promote_op(f, eltype(A), eltype(B))

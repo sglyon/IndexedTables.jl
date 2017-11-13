@@ -27,7 +27,7 @@ t     x
 
 When `f` is a function, it reduces the selection as usual:
 
-```
+```jldoctest reduce
 julia> reduce(+, t, select=:t)
 1.35
 ```
@@ -430,6 +430,42 @@ convertdim(x::NDSparse, d::Int, xlat, agg) = convertdim(x, d, xlat, agg=agg)
 
 sum(x::NDSparse) = sum(x.data)
 
+"""
+`reducedim(f, x::NDSparse, dims)`
+
+Drop `dims` dimension(s) and aggregate with `f`.
+
+```jldoctest
+julia> x = ndsparse(@NT(x=[1,1,1,2,2,2],
+                        y=[1,2,2,1,2,2],
+                        z=[1,1,2,1,1,2]), [1,2,3,4,5,6])
+3-d NDSparse with 6 values (Int64):
+x  y  z │
+────────┼──
+1  1  1 │ 1
+1  2  1 │ 2
+1  2  2 │ 3
+2  1  1 │ 4
+2  2  1 │ 5
+2  2  2 │ 6
+
+julia> reducedim(+, x, 1)
+2-d NDSparse with 3 values (Int64):
+y  z │
+─────┼──
+1  1 │ 5
+2  1 │ 7
+2  2 │ 9
+
+julia> reducedim(+, x, (1,3))
+1-d NDSparse with 2 values (Int64):
+y │
+──┼───
+1 │ 5
+2 │ 16
+
+```
+"""
 function reducedim(f, x::NDSparse, dims)
     keep = setdiff([1:ndims(x);], map(d->fieldindex(x.index.columns,d), dims))
     if isempty(keep)
