@@ -333,9 +333,9 @@ Get the values of an `NDSparse` object. Same as [`rows`](@ref) but acts only on 
 """
 function values(t::NDSparse, which...)
     if values(t) isa Columns
-        rows(values(t), which)
+        rows(values(t), which...)
     else
-        if which != 1
+        if which[1] != 1
             error("column $which not found")
         end
         values(t)
