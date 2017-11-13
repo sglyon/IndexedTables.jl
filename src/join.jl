@@ -1,5 +1,7 @@
 using DataValues
 
+export groupjoin
+
 # product-join on equal lkey and rkey starting at i, j
 function joinequalblock{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout, lkey, rkey,
                         ldata, rdata, lperm, rperm, init_group, accumulate, i,j)
@@ -192,7 +194,11 @@ function init_join_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, acc
     else
         left_type = eltype(ldata)
         right_type = eltype(rdata)
-        out_type = _promote_op(f, left_type, right_type)
+        if f === concat_tup
+            out_type = concat_tup_type(left_type, right_type)
+        else
+            out_type = _promote_op(f, left_type, right_type)
+        end
         if init_group === nothing
             init_group = () -> similar(arrayof(out_type), 0)
         end
@@ -202,7 +208,7 @@ function init_join_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, acc
         group_type = _promote_op(accumulate, typeof(init_group()), out_type)
         data = similar(arrayof(group_type), 0)
     end
-    
+
     if isa(typ, Val{:inner})
         guess = min(length(lkey), length(rkey))
     else
@@ -212,6 +218,154 @@ function init_join_output(typ, grp, f, ldata, rdata, lkey, rkey, init_group, acc
     _sizehint!(similar(lkey,0), guess), _sizehint!(data, guess), loutput, routput, lnull, rnull, init_group, accumulate
 end
 
+"""
+`join([f, ] left, right; how, <options>)`
+
+Join two tables (`left` and `right`). `how` specifies which join method is used (one of `:inner`, `:left`, `:right`, `:outer` and `:anti`).
+By default, join keys are implied to be the primary keys, but this can be changed using the `lkey` and `rkey` options. See Options section below.
+
+The function `f` must take 2 arguments: tuples of non-key fields from both tables as input. The fields chosen for `f` can be configured using `lselect` and `rselect` options. See Options section below. If `f` is not specified, then these tuples are concatenated to form the non-indexed fields of the output.
+
+# Inner join
+
+Inner join is the default join (when `how` is unspecified). It looks up keys from `left` in `right` and only joins them when there is a match. This generates the "intersection" of keys from `left` and `right`.
+
+```jldoctest
+julia> l = table([1,1,2,2], [1,2,1,2], [1,2,3,4],
+                 names=[:a,:b,:c], pkey=(:a, :b))
+Table with 4 rows, 3 columns:
+a  b  c
+───────
+1  1  1
+1  2  2
+2  1  3
+2  2  4
+
+julia> r = table([0,1,1,3], [1,1,2,2], [1,2,3,4],
+                 names=[:a,:b,:d], pkey=(:a, :b))
+Table with 4 rows, 3 columns:
+a  b  d
+───────
+0  1  1
+1  1  2
+1  2  3
+3  2  4
+
+julia> join(l,r) # inner join
+Table with 2 rows, 4 columns:
+a  b  c  d
+──────────
+1  1  1  2
+1  2  2  3
+```
+
+# Left join
+
+Left join looks up rows from `right` where keys match that in `left`. If there are no such rows in `right`, an NA value is used for every selected field from right.
+
+```jldoctest
+julia> join(l,r, how=:left)
+Table with 4 rows, 4 columns:
+a  b  c  d
+────────────
+1  1  1  2
+1  2  2  3
+2  1  3  #NA
+2  2  4  #NA
+```
+
+# Outer join
+
+Outer (aka Union) join looks up rows from `right` where keys match that in `left`, and also rows from `left` where keys match those in `left`, if there are no matches on either side, a tuple of NA values is used. The output is guarranteed to contain the union of all keys from both tables.
+
+```jldoctest
+julia> join(l,r, how=:outer)
+Table with 6 rows, 4 columns:
+a  b  c    d
+──────────────
+0  1  #NA  1
+1  1  1    2
+1  2  2    3
+2  1  3    #NA
+2  2  4    #NA
+3  2  #NA  4
+```
+
+# Anti join
+
+Anti join keeps rows in `left` whose keys are NOT present in `right`.
+
+```jldoctest
+julia> join(l, r, how=:anti)
+Table with 2 rows, 3 columns:
+a  b  c
+───────
+2  1  3
+2  2  4
+```
+
+# One-to-many and many-to-many matches
+
+If the same key appears multiple times in either table (say, `m` and `n` times respectively), each row with a key from `left` is matched with each row from `right` with that key (resulting in `m×n` output rows with the same key.)
+
+```jldoctest
+julia> l1 = table([1,2,2,3], [1,2,3,4], names=[:x,:y])
+Table with 4 rows, 2 columns:
+x  y
+────
+1  1
+2  2
+2  3
+3  4
+
+julia> r1 = table([2,2,3,3], [5,6,7,8], names=[:x,:z])
+Table with 4 rows, 2 columns:
+x  z
+────
+2  5
+2  6
+3  7
+3  8
+
+julia> join(l1,r1, lkey=:x, rkey=:x)
+Table with 6 rows, 3 columns:
+x  y  z
+───────
+2  2  5
+2  2  6
+2  3  5
+2  3  6
+3  4  7
+3  4  8
+```
+This applies to all joins described above except anti join where rows are not matched.
+
+# Options
+
+- `how::Symbol` -- join method to use. Described above.
+- `lkey::Selection` -- fields from `left` to match on
+- `rkey::Selection` -- fields from `right` to match on
+- `lselect::Selection` -- fields from `left` to use as input to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `lkey`.
+- `rselect::Selection` -- fields from `left` to use as input to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `rkey`.
+
+See `select` for a description of `Selection` type.
+
+```jldoctest
+julia> join(l, r, lkey=:a, rkey=:a,
+            lselect=:b, rselect=:d, how=:outer)
+Table with 8 rows, 3 columns:
+a  b    d
+───────────
+0  #NA  1
+1  1    2
+1  1    3
+1  2    2
+1  2    3
+2  1    #NA
+2  2    #NA
+3  #NA  4
+```
+"""
 function Base.join(f, left::Dataset, right::Dataset;
                    how=:inner, group=false,
                    lkey=pkeynames(left), rkey=pkeynames(right),
@@ -219,12 +373,30 @@ function Base.join(f, left::Dataset, right::Dataset;
                        valuenames(left) : excludecols(left, lkey),
                    rselect=isa(right, NDSparse) ?
                        valuenames(right) : excludecols(right, lkey),
+                   name = nothing,
                    init_group=nothing,
                    accumulate=nothing,
                    cache=true)
 
     lperm = sortpermby(left, lkey; cache=cache)
     rperm = sortpermby(right, rkey; cache=cache)
+    if !isa(lkey, Tuple)
+        lkey = (lkey,)
+    end
+
+    if !isa(rkey, Tuple)
+        rkey = (rkey,)
+    end
+
+    if f === concat_tup
+        if !isa(lselect, Tuple)
+            lselect = (lselect,)
+        end
+
+        if !isa(rselect, Tuple)
+            rselect = (rselect,)
+        end
+    end
 
     lkey = rows(left, lkey)
     rkey = rows(right, rkey)
@@ -239,15 +411,110 @@ function Base.join(f, left::Dataset, right::Dataset;
     _join!(typ, grp, f, I, data, lout, rout, lnull, rnull,
            lkey, rkey, ldata, rdata, lperm, rperm, init_group, accumulate)
 
+    if group && left isa NextTable && !(data isa Columns)
+        data = Columns(@NT(groups=data))
+    end
     convert(collectiontype(left), I, data, presorted=true, copy=false)
 end
 
-function Base.join(left::Dataset, right::Dataset; kwargs...)
-    join(concat_tup, left, right; kwargs...)
+function Base.join(left::Dataset, right::Dataset; how=:inner, kwargs...)
+    f = how === :anti ? (x,y) -> x : concat_tup
+    join(f, left, right; how=how, kwargs...)
 end
 
-function groupjoin(left::Dataset, right::Dataset; kwargs...)
-    join(concat_tup, left, right; group=true, kwargs...)
+"""
+`groupjoin([f, ] left, right; how, <options>)`
+
+Join `left` and `right` creating groups of values with matching keys.
+
+# Inner join
+
+Inner join is the default join (when `how` is unspecified). It looks up keys from `left` in `right` and only joins them when there is a match. This generates the "intersection" of keys from `left` and `right`.
+
+# One-to-many and many-to-many matches
+
+If the same key appears multiple times in either table (say, `m` and `n` times respectively), each row with a key from `left` is matched with each row from `right` with that key. The resulting group has `m×n` output elements.
+
+```jldoctest
+julia> l = table([1,1,1,2], [1,2,2,1], [1,2,3,4],
+                 names=[:a,:b,:c], pkey=(:a, :b))
+Table with 4 rows, 3 columns:
+a  b  c
+───────
+1  1  1
+1  2  2
+1  2  3
+2  1  4
+
+julia> r = table([0,1,1,2], [1,2,2,1], [1,2,3,4],
+                 names=[:a,:b,:d], pkey=(:a, :b))
+Table with 4 rows, 3 columns:
+a  b  d
+───────
+0  1  1
+1  2  2
+1  2  3
+2  1  4
+
+julia> groupjoin(l,r)
+Table with 2 rows, 3 columns:
+a  b  groups
+──────────────────────────────────────────────────────────────────────────────────────────────────────
+1  2  NamedTuples._NT_c_d{Int64,Int64}[(c = 2, d = 2), (c = 2, d = 3), (c = 3, d = 2), (c = 3, d = 3)]
+2  1  NamedTuples._NT_c_d{Int64,Int64}[(c = 4, d = 4)]
+```
+
+# Left join
+
+Left join looks up rows from `right` where keys match that in `left`. If there are no such rows in `right`, an NA value is used for every selected field from right.
+
+```jldoctest
+julia> groupjoin(l,r, how=:left)
+Table with 3 rows, 3 columns:
+a  b  groups
+──────────────────────────────────────────────────────────────────────────────────────────────────────
+1  1  NamedTuples._NT_c_d{Int64,Int64}[]
+1  2  NamedTuples._NT_c_d{Int64,Int64}[(c = 2, d = 2), (c = 2, d = 3), (c = 3, d = 2), (c = 3, d = 3)]
+2  1  NamedTuples._NT_c_d{Int64,Int64}[(c = 4, d = 4)]
+```
+
+# Outer join
+
+Outer (aka Union) join looks up rows from `right` where keys match that in `left`, and also rows from `left` where keys match those in `left`, if there are no matches on either side, a tuple of NA values is used. The output is guarranteed to contain 
+
+```jldoctest
+
+julia> groupjoin(l,r, how=:outer)
+Table with 4 rows, 3 columns:
+a  b  groups
+──────────────────────────────────────────────────────────────────────────────────────────────────────
+0  1  NamedTuples._NT_c_d{Int64,Int64}[]
+1  1  NamedTuples._NT_c_d{Int64,Int64}[]
+1  2  NamedTuples._NT_c_d{Int64,Int64}[(c = 2, d = 2), (c = 2, d = 3), (c = 3, d = 2), (c = 3, d = 3)]
+2  1  NamedTuples._NT_c_d{Int64,Int64}[(c = 4, d = 4)]
+```
+
+# Options
+
+- `how::Symbol` -- join method to use. Described above.
+- `lkey::Selection` -- fields from `left` to match on
+- `rkey::Selection` -- fields from `right` to match on
+- `lselect::Selection` -- fields from `left` to use as input to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `lkey`.
+- `rselect::Selection` -- fields from `left` to use as input to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `rkey`.
+
+```jldoctest
+julia> groupjoin(l,r, lkey=:a, rkey=:a, lselect=:c, rselect=:d, how=:outer)
+Table with 3 rows, 2 columns:
+a  groups
+───────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────────
+0  NamedTuples._NT_c_d{Int64,Int64}[]
+1  NamedTuples._NT_c_d{Int64,Int64}[(c = 1, d = 2), (c = 1, d = 3), (c = 2, d = 2), (c = 2, d = 3), (c = 3, d = 2), (c = 3, d = 3)]
+2  NamedTuples._NT_c_d{Int64,Int64}[(c = 4, d = 4)]
+```
+"""
+function groupjoin(left::Dataset, right::Dataset; how=:inner, kwargs...)
+    f = how === :anti ? (x,y) -> x : concat_tup
+    join(f, left, right; group=true, how=how, kwargs...)
 end
 
 for (fn, how) in [:naturaljoin =>     (:inner, false, concat_tup),

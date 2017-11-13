@@ -1,4 +1,4 @@
-using OnlineStatsBase
+using OnlineStats
 export groupreduce, groupby, aggregate, aggregate_vec
 
 """
@@ -160,6 +160,9 @@ Group rows by `by`, and apply `f` to reduce each group. `f` can be a function, O
 # Examples
 
 ```jldoctest
+julia> t=table([1,1,1,2,2,2], [1,1,2,2,1,1], [1,2,3,4,5,6],
+               names=[:x,:y,:z]);
+
 julia> groupreduce(+, t, :x, select=:z)
 Table with 2 rows, 2 columns:
 x  +
@@ -213,14 +216,17 @@ x  xsum  negysum
 
 """
 function groupreduce(f, t::Dataset, by=pkeynames(t); select=valuenames(t))
-    if typeof(t)<:NextTable && !isa(f, Tup)
+    data = rows(t, select)
+    if typeof(t)<:NextTable &&
+        !isa(f, Tup) &&
+        !(reduced_type(f, data, false) <: Tup)
+        # Name the result after the function
         return groupreduce((f,), t, by, select=select)
     end
-    if typeof(t)<:NextTable && !isa(by, Tuple)
+    if !isa(by, Tuple)
         by=(by,)
     end
     key  = rows(t, by)
-    data = rows(t, select)
     perm = sortpermby(t, by)
 
     dest_key = similar(key, 0)
@@ -278,17 +284,87 @@ collectiontype(::Type{<:NDSparse}) = NDSparse
 collectiontype(::Type{<:NextTable}) = NextTable
 collectiontype(t::Dataset) = collectiontype(typeof(t))
 
+"""
+`groupby(f, t[, by::Selection]; select::Selection)`
+
+Group rows by `by`, and apply `f` to each group. `f` can be a function or a tuple of functions. The result of `f` on each group is put in a table keyed by unique `by` values.
+
+# Examples
+
+```jldoctest
+julia> groupby(mean, t, :x, select=:z)
+Table with 2 rows, 2 columns:
+x  mean
+───────
+1  2.0
+2  5.0
+
+julia> groupby(identity, t, (:x, :y), select=:z)
+Table with 4 rows, 3 columns:
+x  y  identity
+──────────────
+1  1  [1, 2]
+1  2  [3]
+2  1  [5, 6]
+2  2  [4]
+
+julia> groupby(mean, t, (:x, :y), select=:z)
+Table with 4 rows, 3 columns:
+x  y  mean
+──────────
+1  1  1.5
+1  2  3.0
+2  1  5.5
+2  2  4.0
+```
+
+multiple aggregates can be computed by passing a tuple of functions:
+
+```jldoctest
+julia> groupby((mean, std, var), t, :y, select=:z)
+Table with 2 rows, 4 columns:
+y  mean  std       var
+──────────────────────────
+1  3.5   2.38048   5.66667
+2  3.5   0.707107  0.5
+
+julia> groupby(@NT(q25=z->quantile(z, 0.25), q50=median,
+                   q75=z->quantile(z, 0.75)), t, :y, select=:z)
+Table with 2 rows, 4 columns:
+y  q25   q50  q75
+──────────────────
+1  1.75  3.5  5.25
+2  3.25  3.5  3.75
+```
+
+Finally, it's possible to select different inputs for different functions by using a named tuple of `slector => function` pairs:
+
+```jldoctest
+julia> groupby(@NT(xmean=:z=>mean, ystd=(:y=>-)=>std), t, :x)
+Table with 2 rows, 3 columns:
+x  xmean  ystd
+─────────────────
+1  2.0    0.57735
+2  5.0    0.57735
+
+```
+
+"""
+function groupby end
 function groupby(f, t::Dataset, by=pkeynames(t); select=valuenames(t))
+    data = rows(t, select)
     # we want to try and keep the column names
-    if typeof(t)<:NextTable && !isa(by, Tuple)
-        by=(by,)
+    if typeof(t)<:NextTable &&
+        !isa(f, Tup) &&
+        !(reduced_type(f, data, true) <: Tup)
+        # Name the result after the function
+        return groupby((f,), t, by, select=select)
     end
-    if typeof(t)<:NextTable && !isa(f, Tup)
-        f=(f,)
+    if !(by isa Tuple)
+        by = (by,)
     end
 
     key  = rows(t, by)
-    data = rows(t, select)
 
     perm = sortpermby(t, by)
     fs, input, S = init_inputs(f, data, reduced_type, true)

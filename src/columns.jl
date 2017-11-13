@@ -878,7 +878,7 @@ renamecol(t, name, newname) = @cols rename!(t, name, newname)
 
 ## Utilities for mapping and reduction with many functions / OnlineStats
 
-using OnlineStatsBase
+using OnlineStats
 
 @inline _apply(f::Series, g, x) = fit!(g, x)
 @inline _apply(f::Tup, y::Tup, x::Tup) = map(_apply, f, y, x)
