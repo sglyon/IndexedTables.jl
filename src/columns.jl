@@ -885,14 +885,14 @@ renamecol(t, name, newname) = @cols rename!(t, name, newname)
 
 using OnlineStats
 
-@inline _apply(f::Series, g, x) = fit!(g, x)
+@inline _apply(f::Series, g, x) = (fit!(g, x); g)
 @inline _apply(f::Tup, y::Tup, x::Tup) = map(_apply, f, y, x)
 @inline _apply(f, y, x) = f(y, x)
 @inline _apply(f::Tup, x::Tup) = map(_apply, f, x)
 @inline _apply(f, x) = f(x)
 
 @inline init_first(f, x) = x
-@inline init_first(f::Series, x) = (g=copy(f); fit!(g, x))
+@inline init_first(f::Series, x) = (g=copy(f); fit!(g, x); g)
 @inline init_first(f::Tup, x::Tup) = map(init_first, f, x)
 
 # Initialize type of output, functions to apply, input and output vectors

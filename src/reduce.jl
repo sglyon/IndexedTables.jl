@@ -116,7 +116,8 @@ See [`Selection`](@ref) for more on what selectors can be specified. Here since 
 """
 function reduce(f, t::Dataset; select=valuenames(t))
     fs, input, T = init_inputs(f, rows(t, select), reduced_type, false)
-    _reduce(fs, input)
+    acc = init_first(fs, input[1])
+    _reduce(fs, input, acc)
 end
 
 function reduce(f, t::Dataset, v0; select=valuenames(t))
@@ -124,8 +125,7 @@ function reduce(f, t::Dataset, v0; select=valuenames(t))
     reduce((x,y)->_apply(fs,x,y), input, v0)
 end
 
-function _reduce(fs, input)
-    acc = init_first(fs, input[1])
+function _reduce(fs, input, acc)
     @inbounds @simd for i=2:length(input)
         acc = _apply(fs, acc, input[i])
     end
