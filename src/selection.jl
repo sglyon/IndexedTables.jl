@@ -1,4 +1,4 @@
-export dropna
+export dropna, selectkeys, selectvalues
 
 """
 `select(t::Table, which::Selection)`
