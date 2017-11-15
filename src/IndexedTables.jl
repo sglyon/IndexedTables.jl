@@ -54,4 +54,7 @@ include("join.jl")
 # TableTraits.jl integration
 include("tabletraits.jl")
 
+# Plots.jl integration
+include("plotrecipes.jl")
+
 end # module
