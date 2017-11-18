@@ -257,6 +257,7 @@ end
 # Easy constructor to create a derivative table
 function table(t::NextTable;
                columns=t.columns,
+               chunks=nothing,
                pkey=t.pkey,
                perms=t.perms,
                cardinality=t.cardinality,
@@ -266,6 +267,7 @@ function table(t::NextTable;
     table(columns,
           pkey=pkey,
           perms=perms,
+          chunks=chunks,
           cardinality=cardinality,
           presorted=presorted,
           copy=copy)
