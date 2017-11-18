@@ -208,7 +208,7 @@ end
 getindex(c::Columns{D}, i::Integer) where {D<:Tuple} = ith_all(i, c.columns)
 getindex(c::Columns{D}, i::Integer) where {D<:NamedTuple} = D(ith_all(i, c.columns)...)
 
-getindex(c::Columns{D,C}, p::AbstractVector) where {D,C} = Columns{D,C}(map(c->c[p], c.columns))
+getindex(c::Columns, p::AbstractVector) = Columns(map(c->c[p], c.columns))
 
 @inline setindex!(I::Columns, r::Tup, i::Integer) = (foreach((c,v)->(c[i]=v), I.columns, r); I)
 
@@ -284,9 +284,6 @@ sort(c::Columns) = c[sortperm(c)]
 
 map(p::ProjFn, c::Columns) = Columns(p(c.columns))
 map(p::Proj, c::Columns) = p(c.columns)
-
-vcat(c::Columns{D,C}, cs::Columns{D,C}...) where {D<:Tup,C<:Tuple} = Columns{D,C}((map(vcat, map(x->x.columns, (c,cs...))...)...,))
-vcat(c::Columns{D,C}, cs::Columns{D,C}...) where {D<:Tup,C<:NamedTuple} = Columns{D,C}(C(map(vcat, map(x->x.columns, (c,cs...))...)...,))
 
 function Base.vcat(c::Columns, cs::Columns...)
     fns = map(fieldnames, (map(x->x.columns, (c, cs...))))
