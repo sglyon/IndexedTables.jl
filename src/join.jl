@@ -5,40 +5,6 @@ export groupjoin
 # product-join on equal lkey and rkey starting at i, j
 function joinequalblock{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout, lkey, rkey,
                         ldata, rdata, lperm, rperm, init_group, accumulate, i,j)
-    ll = length(lkey)
-    rr = length(rkey)
-
-    i1 = i
-    j1 = j
-    while i1 < ll && rowcmp(lkey, lperm[i1], lkey, lperm[i1+1]) == 0
-        i1 += 1
-    end
-    while j1 < rr && rowcmp(rkey, rperm[j1], rkey, rperm[j1+1]) == 0
-        j1 += 1
-    end
-    if typ !== :anti
-        if !grp
-            for x=i:i1
-                for y=j:j1
-                    push!(I, lkey[lperm[x]])
-                    # optimized push! method for concat_tup
-                    _push!(Val{:both}(), f, data,
-                           lout, rout, ldata, rdata,
-                           lperm[x], rperm[y], NA, NA)
-                end
-            end
-        else
-            push!(I, lkey[lperm[i]])
-            group = init_group()
-            for x=i:i1
-                for y=j:j1
-                    group = accumulate(group, f(ldata[lperm[x]], rdata[rperm[y]]))
-                end
-            end
-            push!(data, group)
-        end
-    end
-    return i1,j1
 end
 
 # copy without allocating struct
@@ -107,12 +73,39 @@ function _join!{typ, grp}(::Val{typ}, ::Val{grp}, f, I, data, lout, rout,
             end
             i += 1
         elseif c==0
-            i, j = joinequalblock(Val{typ}(), Val{grp}(), f, I, data, lout, rout,
-                                  lkey, rkey, ldata, rdata, lperm, rperm,
-                                  init_group, accumulate,
-                                  i, j)
-            i += 1
-            j += 1
+            # Join the elements that are equal at once
+            i1 = i
+            j1 = j
+            while i1 < ll && rowcmp(lkey, lperm[i1], lkey, lperm[i1+1]) == 0
+                i1 += 1
+            end
+            while j1 < rr && rowcmp(rkey, rperm[j1], rkey, rperm[j1+1]) == 0
+                j1 += 1
+            end
+            if typ !== :anti
+                if !grp
+                    for x=i:i1
+                        for y=j:j1
+                            push!(I, lkey[lperm[x]])
+                            # optimized push! method for concat_tup
+                            _push!(Val{:both}(), f, data,
+                                   lout, rout, ldata, rdata,
+                                   lperm[x], rperm[y], NA, NA)
+                        end
+                    end
+                else
+                    push!(I, lkey[lperm[i]])
+                    group = init_group()
+                    for x=i:i1
+                        for y=j:j1
+                            group = accumulate(group, f(ldata[lperm[x]], rdata[rperm[y]]))
+                        end
+                    end
+                    push!(data, group)
+                end
+            end
+            i = i1 + 1
+            j = j1 + 1
         else
             if typ === :outer
                 push!(I, rkey[rperm[j]])
