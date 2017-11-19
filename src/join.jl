@@ -806,7 +806,7 @@ function merge!(x::NDSparse{T,D}, y::NDSparse{S,D}; agg = IndexedTables.right) w
 end
 # merge! without flush!
 function _merge!(dst::NDSparse, src::NDSparse, f)
-    if isless(dst.index[end], src.index[1])
+    if length(dst.index)==0 || isless(dst.index[end], src.index[1])
         append!(dst.index, src.index)
         append!(dst.data, src.data)
     else
