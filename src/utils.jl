@@ -2,7 +2,7 @@ using Base.Test
 import Base: tuple_type_cons, tuple_type_head, tuple_type_tail, in, ==, isless, convert,
              length, eltype, start, next, done, show
 
-export @pick, pick
+export @pick, pick, @NT
 
 eltypes(::Type{Tuple{}}) = Tuple{}
 eltypes{T<:Tuple}(::Type{T}) =
@@ -10,6 +10,30 @@ eltypes{T<:Tuple}(::Type{T}) =
 eltypes{T<:NamedTuple}(::Type{T}) = map_params(eltype, T)
 Base.@pure astuple{T<:NamedTuple}(::Type{T}) = Tuple{T.parameters...}
 astuple{T<:Tuple}(::Type{T}) = T
+
+function tuplesetindex(x::Tuple{Vararg{Any,N}}, v, i) where N
+    ntuple(Val{N}) do j
+        i == j ? v : x[j]
+    end
+end
+
+@generated function tuplesetindex(x::NamedTuple, v, i::Symbol)
+    fields = fieldnames(x)
+    :(@NT($(fields...))(tuplesetindex(x, v, findfirst($fields, i))...))
+end
+
+@generated function tuplesetindex(x::NamedTuple, v, i::Int)
+    fields = fieldnames(x)
+    N = length(fields)
+    quote
+        tup = Base.@ntuple $N j -> i == j ? v : x[j]
+        @NT($(fields...))(tuplesetindex(tup, v, i)...)
+    end
+end
+
+function tuplesetindex(x::Union{NamedTuple, Tuple}, v::Tuple, i::Tuple)
+    reduce((t, j)->tuplesetindex(t, v[j], i[j]), x, 1:length(i))
+end
 
 # sizehint, making sure to return first argument
 _sizehint!(a::Array{T,1}, n::Integer) where {T} = (sizehint!(a, n); a)
@@ -84,7 +108,7 @@ fields in the output.
 The callable is specialized to work efficiently on `Columns` by calling it once
 on `.columns` field to get the equivalent result.
 
-Calling `map` on an `IndexedTable` with a `@pick` callable will run the callable on
+Calling `map` on an `NDSparse` with a `@pick` callable will run the callable on
 the data columns.
 
 # Examples
@@ -94,7 +118,7 @@ the data columns.
     @pick(2,1)(c) == Columns([2.0], [1])
     @pick(y,x)(c) == Columns(y=[2.0], x=[1])
 
-    t = IndexedTable([1], c)
+    t = NDSparse([1], c)
     map(@pick(y, x), t) == IndexedTables([1], Columns(y=[2.0], x=[1]))
 """
 macro pick(ex...)
@@ -292,6 +316,8 @@ Base.@pure function arrayof(S)
         Columns{T, Tuple{map(arrayof, T.parameters)...}}
     elseif T<:NamedTuple
         Columns{T,namedtuple(fieldnames(T)...){map(arrayof, T.parameters)...}}
+    elseif T<:DataValue
+        DataValueArray{T.parameters[1],1}
     else
         Vector{T}
     end
@@ -299,6 +325,14 @@ end
 
 @inline strip_unionall_params(T::UnionAll) = strip_unionall_params(T.body)
 @inline strip_unionall_params(T) = map(strip_unionall, T.parameters)
+
+Base.@pure function promote_union(T::Type)
+    if isa(T, Union)
+        return promote_type(T.a, promote_union(T.b))
+    else
+        return T
+    end
+end
 
 Base.@pure function strip_unionall(T)
     if isleaftype(T) || T == Union{}
@@ -312,26 +346,28 @@ Base.@pure function strip_unionall(T)
         end
     elseif T<:NamedTuple
         if isa(T, Union)
-            return Any
+            return promote_union(T)
         else
             NT = namedtuple(fieldnames(T)...)
             return NT{strip_unionall_params(T)...}
         end
     elseif isa(T, UnionAll)
         return Any
-    elseif isa(T, Union) || T.abstract
+    elseif isa(T, Union)
+        return promote_union(T)
+    elseif T.abstract
         return T
     else
         return Any
     end
 end
 
-@inline function _promote_op{S}(f, ::Type{S})
+Base.@pure function _promote_op{S}(f, ::Type{S})
     t = Core.Inference.return_type(f, Tuple{Base._default_type(S)})
     strip_unionall(t)
 end
 
-@inline function _promote_op{S,T}(f, ::Type{S}, ::Type{T})
+Base.@pure function _promote_op{S,T}(f, ::Type{S}, ::Type{T})
     t = Core.Inference.return_type(f, Tuple{Base._default_type(S),
                                         Base._default_type(T)})
     strip_unionall(t)
@@ -373,12 +409,23 @@ Base.@pure @generated function map_params{T<:NamedTuple,S<:NamedTuple}(f, ::Type
     :($NT{_map_params(f, T, S)...})
 end
 
-Base.@pure function concat_nt_type{
-           T<:NamedTuple,S<:NamedTuple}(::Type{T}, ::Type{S})
-    namedtuple(fieldnames(T)..., fieldnames(S)...)
+@inline function concat_tup(a::NamedTuple, b::NamedTuple)
+    concat_tup_type(typeof(a), typeof(b))(a..., b...)
+end
+@inline concat_tup(a::Tup, b::Tup) = (a..., b...)
+@inline concat_tup(a::Tup, b) = (a..., b)
+@inline concat_tup(a, b::Tup) = (a, b...)
+@inline concat_tup(a, b) = (a..., b...)
+
+Base.@pure function concat_tup_type(T::Type{<:Tuple}, S::Type{<:Tuple})
+    Tuple{T.parameters..., S.parameters...}
 end
 
-function concat_tup(a::NamedTuple, b::NamedTuple)
-    concat_nt_type(typeof(a), typeof(b))(a..., b...)
+Base.@pure function concat_tup_type{
+           T<:NamedTuple,S<:NamedTuple}(::Type{T}, ::Type{S})
+    namedtuple(fieldnames(T)..., fieldnames(S)...){T.parameters..., S.parameters...}
 end
-concat_tup(a::Tup, b::Tup) = (a..., b...)
+
+Base.@pure function concat_tup_type(T::Type, S::Type)
+    Tuple{T,S}
+end
