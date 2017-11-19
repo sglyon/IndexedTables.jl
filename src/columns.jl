@@ -919,36 +919,46 @@ function mapped_type(f, x, isvec)
     _promote_op(f, eltype(x))
 end
 
-function init_inputs(f::Tup, input, gettype, isvec)
+function init_funcs(f::Tup, isvec)
     if isa(f, NamedTuple)
-        return init_inputs((map(Pair, fieldnames(f), f)...),
-                            input, gettype, isvec)
+        return init_funcs((map(Pair, fieldnames(f), f)...), isvec)
     end
 
     funcmap = map(f) do g
         if isa(g, Pair)
             name = g[1]
             if isa(g[2], Pair)
-                selector, fn = g[2]
-                vec = rows(input, selector)
+                sel, fn = g[2]
             else
-                vec = input
+                sel = nothing
                 fn = g[2]
             end
-            (name, vec, fn)
+            (name, sel, fn)
         else
-            (nicename(g), input, g)
+            (nicename(g), nothing, g)
         end
     end
 
     ns = map(x->x[1], funcmap)
-    xs = map(x->x[2], funcmap)
+    ss = map(x->x[2], funcmap)
     fs = map(map(x->x[3], funcmap)) do f
         f isa OnlineStat ? Series(f) : f
     end
 
+    namedtuple(ns...)(fs...), ss
+end
+
+function init_inputs(f::Tup, input, gettype, isvec)
+    if isa(f, NamedTuple)
+        return init_inputs((map(Pair, fieldnames(f), f)...), input, gettype, isvec)
+    end
+    fs, selectors = init_funcs(f, isvec)
+
+    xs = map(s->s === nothing ? input : rows(input, s), selectors)
+
     output_eltypes = map((f,x) -> gettype(f, x, isvec), fs, xs)
 
+    ns = fieldnames(fs)
     NT = namedtuple(ns...)
 
     # functions, input, output_eltype

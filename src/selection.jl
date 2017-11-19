@@ -462,7 +462,7 @@ function Base.filter(pred::Tuple, t::Dataset; select=nothing)
             c, f = p
             filt_by_col!(f, rows(x, c), indxs)
         else
-            filt_by_col!(f, x, indxs)
+            filt_by_col!(p, x, indxs)
         end
     end
     subtable(t, indxs)
