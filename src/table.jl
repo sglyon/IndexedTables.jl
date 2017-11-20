@@ -282,6 +282,8 @@ Base.copy(t::NextTable) = NextTable(t)
 Base.:(==)(a::NextTable, b::NextTable) = rows(a) == rows(b)
 
 Base.getindex(t::NextTable, i::Integer) = getindex(t.columns, i)
+Base.getindex(t::NextTable, i::Colon) = copy(t)
+Base.endof(t::NextTable) = length(t)
 
 Base.length(t::NextTable) = length(t.columns)
 Base.start(t::NextTable) = start(t.columns)
