@@ -141,7 +141,6 @@ function groupreduce_to!(f, key, data, dest_key, dest_data, perm)
         val = init_first(f, data[perm[i1]])
         i = i1+1
         while i <= n && roweq(key, perm[i], perm[i1])
-            _apply(f, val, data[perm[i]])
             val = _apply(f, val, data[perm[i]])
             i += 1
         end
@@ -492,3 +491,6 @@ function reducedim_vec(f, x::NDSparse, dims; with=valuenames(x))
 end
 
 reducedim_vec(f, x::NDSparse, dims::Symbol) = reducedim_vec(f, x, [dims])
+
+OnlineStats.Series(x::Dataset, stat; select=valuenames(x)) =
+    reduce(stat, x, select=select)
