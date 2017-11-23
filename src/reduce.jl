@@ -284,9 +284,9 @@ collectiontype(::Type{<:NextTable}) = NextTable
 collectiontype(t::Dataset) = collectiontype(typeof(t))
 
 """
-`groupby(f, t[, by::Selection]; select::Selection)`
+`groupby(f, t[, by::Selection]; select::Selection, flatten)`
 
-Group rows by `by`, and apply `f` to each group. `f` can be a function or a tuple of functions. The result of `f` on each group is put in a table keyed by unique `by` values.
+Group rows by `by`, and apply `f` to each group. `f` can be a function or a tuple of functions. The result of `f` on each group is put in a table keyed by unique `by` values. `flatten` will flatten the result and can be used when `f` returns a vector instead of a single scalar value.
 
 # Examples
 
@@ -348,12 +348,27 @@ x  xmean  ystd
 ─────────────────
 1  2.0    0.57735
 2  5.0    0.57735
+```
 
+By default, the result of groupby when `f` returns a vector or iterator of values will not be expanded. Pass the `flatten` option as `true` to flatten the grouped column:
+
+```jldoctest
+julia> t = table([1,1,2,2], [3,4,5,6], names=[:x,:y])
+
+julia> groupby((:normy => x->Iterators.repeated(mean(x), length(x)),),
+                t, :x, select=:y, flatten=true)
+Table with 4 rows, 2 columns:
+x  normy
+────────
+1  3.5
+1  3.5
+2  5.5
+2  5.5
 ```
 
 """
 function groupby end
-function groupby(f, t::Dataset, by=pkeynames(t); select=valuenames(t))
+function groupby(f, t::Dataset, by=pkeynames(t); select=valuenames(t), flatten=false)
     data = rows(t, select)
     # we want to try and keep the column names
     if typeof(t)<:NextTable &&
@@ -373,7 +388,9 @@ function groupby(f, t::Dataset, by=pkeynames(t); select=valuenames(t))
     # Note: we're not using S here, we'll let _groupby figure it out
     dest_key, dest_data = _groupby(fs, key, input, perm)
 
-    convert(collectiontype(t), dest_key, dest_data, presorted=true, copy=false)
+    t = convert(collectiontype(t), dest_key, dest_data, presorted=true, copy=false)
+    t isa NextTable && flatten ?
+        IndexedTables.flatten(t, length(columns(t))) : t
 end
 
 Base.@deprecate aggregate(f, t;

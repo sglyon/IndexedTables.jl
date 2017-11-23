@@ -1,3 +1,5 @@
+export flatten
+
 function dedup_names(ns)
     count = Dict{Symbol,Int}()
     for n in ns
@@ -144,4 +146,82 @@ function _mapslices_itable!(f, output, x, iter, iterdims, start)
         append!(D, y.data)
     end
     NDSparse(I,D)
+end
+
+function _flatten!(others, vecvec, out_others, out_vecvec)
+    for i in 1:length(others)
+        vec = vecvec[i]
+        for x in vec
+            push!(out_vecvec, x)
+            pushrow!(out_others, others, i)
+        end
+    end
+end
+
+"""
+`flatten(t::Table, col)`
+
+Flatten `col` column which may contain a vector of vectors while repeating the other fields.
+
+## Examples:
+
+```jldoctest
+julia> x = table([1,2], [[3,4], [5,6]], names=[:x, :y])
+Table with 2 rows, 2 columns:
+x  y
+─────────
+1  [3, 4]
+2  [5, 6]
+
+julia> flatten(x, 2)
+Table with 4 rows, 2 columns:
+x  y
+────
+1  3
+1  4
+2  5
+2  6
+
+julia> x = table([1,2], [table([3,4],[5,6], names=[:a,:b]),
+                         table([7,8], [9,10], names=[:a,:b])], names=[:x, :y]);
+
+julia> flatten(x, :y)
+Table with 4 rows, 3 columns:
+x  a  b
+────────
+1  3  5
+1  4  6
+2  7  9
+2  8  10
+```
+
+"""
+function flatten(t::NextTable, col)
+    vecvec = rows(t, col)
+    everythingbut = excludecols(t, col)
+
+    order_others = Int[colindex(t, everythingbut)...]
+    order_vecvec = Int[colindex(t, col)...]
+
+    others = rows(t, everythingbut)
+    out_others = similar(others, 0)
+    out_vecvec = similar(arrayof(eltype(eltype(vecvec))), 0)
+
+    _flatten!(others, vecvec, out_others, out_vecvec)
+
+    cols = Any[columns(out_others)...]
+    cs = columns(out_vecvec)
+    newcols = isa(cs, Tup) ? Any[cs...] : Any[cs]
+    ns = colnames(out_vecvec)
+    i = colindex(t, col)
+    cns = convert(Array{Any}, colnames(t))
+    if length(ns) == 1 && !(ns[1] isa Symbol)
+        ns = [colname(t, col)]
+    end
+    deleteat!(cns, i)
+    for (n,c) in zip(reverse(ns), reverse(newcols))
+        insert!(cns, i, n)
+        insert!(cols, i, c)
+    end
+    table(cols...; names=cns)
 end
