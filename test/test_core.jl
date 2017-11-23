@@ -878,4 +878,6 @@ end
     t = table([1,1,2,2], [3,4,5,6], names=[:x,:y])
     @test groupby((:normy => x->Iterators.repeated(mean(x), length(x)),),
                   t, :x, select=:y, flatten=true) == table([1,1,2,2], [3.5,3.5,5.5,5.5], names=[:x, :normy])
+    t=table([1,1,1,2,2,2], [1,1,2,1,1,2], [1,2,3,4,5,6], names=[:x,:y,:z]);
+    @test groupby(identity, t, (:x, :y), select=:z, flatten = true) == renamecol(t, :z, :identity)
 end

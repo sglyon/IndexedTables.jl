@@ -375,7 +375,7 @@ function groupby(f, t::Dataset, by=pkeynames(t); select=valuenames(t), flatten=f
         !isa(f, Tup) &&
         !(reduced_type(f, data, true) <: Tup)
         # Name the result after the function
-        return groupby((f,), t, by, select=select)
+        return groupby((f,), t, by, select=select, flatten=flatten)
     end
     if !(by isa Tuple)
         by = (by,)
