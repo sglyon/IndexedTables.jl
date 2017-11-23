@@ -487,6 +487,8 @@ end
 
 import Base.Markdown.with_output_format
 
+global show_compact_when_wide = true
+
 function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothing, cstyle=[], full=false, ellipsis=:middle)
     height, width = displaysize(io) 
     showrows = height-5 - (header !== nothing)
@@ -512,7 +514,7 @@ function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothin
     reprs  = [ sprint(io->showcompact(io,columns(t)[j][i])) for i in rows, j in 1:nc ]
     strcnames = map(string, cnames)
     widths  = [ max(strwidth(get(strcnames, c, "")), isempty(reprs) ? 0 : maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
-    if sum(widths) + 2*nc > width
+    if show_compact_when_wide && sum(widths) + 2*nc > width
         return showmeta(io, t, cnames)
     end
     for c in 1:nc
