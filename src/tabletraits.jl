@@ -4,7 +4,7 @@ using TableTraitsUtils
 TableTraits.isiterable(x::NDSparse) = true
 TableTraits.isiterabletable(x::NDSparse) = true
 
-function TableTraits.getiterator{S<:NDSparse}(source::S)
+function TableTraits.getiterator(source::S) where {S <: NDSparse}
     return rows(source)
 end
 
