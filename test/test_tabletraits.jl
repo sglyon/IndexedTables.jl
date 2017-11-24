@@ -51,4 +51,12 @@ it4 = table(source_array, copy=true)
 @test it4[2] == @NT(a=2,b=2.,c="B")
 @test it4[3] == @NT(a=3,b=3.,c="C")
 
+# Use a Set to really hit the iterator constructor
+as_set = Set(source_array)
+it4 = table(as_set, copy=true)
+@test length(it4) == 3
+@test contains(==, as_set, it4[1])
+@test contains(==, as_set, it4[2])
+@test contains(==, as_set, it4[3])
+
 end
