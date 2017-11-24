@@ -4,7 +4,7 @@ using TableTraitsUtils
 TableTraits.isiterable(x::NDSparse) = true
 TableTraits.isiterabletable(x::NDSparse) = true
 
-function TableTraits.getiterator{S<:NDSparse}(source::S)
+function TableTraits.getiterator(source::S) where {S <: NDSparse}
     return rows(source)
 end
 
@@ -44,5 +44,27 @@ function NDSparse(x; idxcols::Union{Void,Vector{Symbol}}=nothing, datacols::Unio
         return convert(NDSparse, x)
     else
         throw(ArgumentError("x cannot be turned into an NDSparse."))
+    end
+end
+
+function table(rows::AbstractArray{T}; kwargs...) where {T<:NamedTuple}
+    source_data, source_names = TableTraitsUtils.create_columns_from_iterabletable(rows)
+    
+    kwargs_dict = Dict(i[1]=>i[2] for i in kwargs)   
+    kwargs_dict[:copy] = false
+
+    return table(source_data..., names=source_names; kwargs_dict...)
+end
+
+function table(iter; kwargs...)
+    if isiterabletable(iter)
+        source_data, source_names = TableTraitsUtils.create_columns_from_iterabletable(iter)
+
+        kwargs_dict = Dict(i[1]=>i[2] for i in kwargs)   
+        kwargs_dict[:copy] = false
+
+        return table(source_data..., names=source_names; kwargs_dict...)
+    else
+        throw(ArgumentError("iter cannot be turned into a NextTable."))
     end
 end

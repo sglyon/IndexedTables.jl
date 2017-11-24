@@ -93,6 +93,10 @@ julia> b == table(b)
 true
 ```
 
+`table(iter; <options>)`
+
+Construct a table from an iterable table.
+
 
 # Options:
 
