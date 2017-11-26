@@ -919,6 +919,8 @@ function mapped_type(f, x, isvec)
     _promote_op(f, eltype(x))
 end
 
+init_funcs(f, isvec) = init_funcs((f,), isvec)
+
 function init_funcs(f::Tup, isvec)
     if isa(f, NamedTuple)
         return init_funcs((map(Pair, fieldnames(f), f)...), isvec)
