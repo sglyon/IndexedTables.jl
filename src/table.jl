@@ -497,7 +497,7 @@ function set_show_compact!(flag=true)
     show_compact_when_wide = flag
 end
 
-function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothing, cstyle=[], full=false, ellipsis=:middle)
+function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothing, cstyle=[], full=false, ellipsis=:middle, compact=show_compact_when_wide)
     height, width = displaysize(io) 
     showrows = height-5 - (header !== nothing)
     n = length(t)
@@ -522,7 +522,7 @@ function showtable(io::IO, t; header=nothing, cnames=colnames(t), divider=nothin
     reprs  = [ sprint(io->showcompact(io,columns(t)[j][i])) for i in rows, j in 1:nc ]
     strcnames = map(string, cnames)
     widths  = [ max(strwidth(get(strcnames, c, "")), isempty(reprs) ? 0 : maximum(map(strwidth, reprs[:,c]))) for c in 1:nc ]
-    if show_compact_when_wide && sum(widths) + 2*nc > width
+    if compact && sum(widths) + 2*nc > width
         return showmeta(io, t, cnames)
     end
     for c in 1:nc
@@ -569,8 +569,8 @@ function showmeta(io, t, cnames)
     nc = length(columns(t))
     println(io, "Columns:")
     metat = Columns(([1:nc;], [Text(string(get(cnames, i, "<noname>"))) for i in 1:nc],
-                       eltype.([columns(t)...])))
-    showtable(io, metat, cnames=["#", "colname", "type"], cstyle=fill(:bold, nc), full=true)
+                     [map(eltype, columns(t))...]))
+    showtable(io, metat, cnames=["#", "colname", "type"], cstyle=fill(:bold, nc), full=true, compact=false)
 end
 
 function subscriptprint(x::Integer)
