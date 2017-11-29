@@ -338,8 +338,8 @@ This applies to all joins described above except anti join where rows are not ma
 - `how::Symbol` -- join method to use. Described above.
 - `lkey::Selection` -- fields from `left` to match on
 - `rkey::Selection` -- fields from `right` to match on
-- `lselect::Selection` -- fields from `left` to use as input to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `lkey`.
-- `rselect::Selection` -- fields from `left` to use as input to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `rkey`.
+- `lselect::Selection` -- fields from `left` to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `lkey`.
+- `rselect::Selection` -- fields from `right` to use as output columns, or input to `f` if it is specified. By default, this is all fields not selected in `rkey`.
 
 See `select` for a description of `Selection` type.
 
